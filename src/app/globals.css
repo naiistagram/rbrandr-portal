@@ -106,3 +106,54 @@ body {
   transform-origin: 50% 0%;
   animation: bell-ring 3s ease-in-out infinite;
 }
+
+@keyframes beta-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.beta-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(237,1,148,0.18) 0%, rgba(180,0,167,0.22) 50%, rgba(205,85,196,0.18) 100%);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  position: relative;
+  /* animated gradient border via box-shadow + outline trick */
+  box-shadow:
+    0 0 0 1px transparent,
+    inset 0 1px 0 rgba(255,255,255,0.12);
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.beta-pill::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 999px;
+  padding: 1px;
+  background: linear-gradient(90deg, #ed0194, #b400a7, #cd55c4, #ed0194);
+  background-size: 300% 100%;
+  animation: beta-shimmer 3s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.beta-pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.00) 60%);
+  pointer-events: none;
+}

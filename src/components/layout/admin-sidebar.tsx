@@ -38,7 +38,10 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         <div className="flex items-center gap-2.5">
           <Image src="/logo.svg" alt="RBRANDRSPHERE" width={28} height={28} className="flex-shrink-0" />
           <div>
-            <p className="text-[11px] font-bold text-[var(--foreground)] tracking-tight">RBRANDRSPHERE</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] font-bold text-[var(--foreground)] tracking-tight">RBRANDRSPHERE</p>
+              <span className="beta-pill flex-shrink-0">Beta</span>
+            </div>
             <div className="flex items-center gap-1 mt-0.5">
               <Shield className="w-2.5 h-2.5 text-[var(--accent)]" />
               <p className="text-[10px] text-[var(--accent)] uppercase tracking-widest font-semibold">Admin</p>

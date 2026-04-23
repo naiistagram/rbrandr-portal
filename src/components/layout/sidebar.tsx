@@ -115,7 +115,10 @@ export function Sidebar({ user, serviceType, notificationCount = 0 }: SidebarPro
         <div className="flex items-center gap-2.5">
           <Image src="/logo.svg" alt="RBRANDRSPHERE" width={28} height={28} className="flex-shrink-0" />
           <div className="min-w-0">
-            <p className="text-[11px] font-bold text-[var(--foreground)] tracking-tight truncate">{clientName}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] font-bold text-[var(--foreground)] tracking-tight truncate">{clientName}</p>
+              <span className="beta-pill flex-shrink-0">Beta</span>
+            </div>
             <p className="text-[10px] text-[var(--foreground-subtle)] uppercase tracking-widest">Client Portal</p>
           </div>
         </div>
