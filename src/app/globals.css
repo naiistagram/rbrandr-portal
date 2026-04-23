@@ -1,8 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #09090b;
+  --surface: #111113;
+  --surface-2: #1a1a1e;
+  --border: #27272a;
+  --border-subtle: #1f1f23;
+  --foreground: #fafafa;
+  --foreground-muted: #a1a1aa;
+  --foreground-subtle: #52525b;
+  --accent: #ed0194;
+  --accent-hover: #d4017f;
+  --accent-subtle: rgba(237, 1, 148, 0.1);
+  --accent-purple: #b400a7;
+  --accent-pink-light: #cd55c4;
 }
 
 @theme inline {
@@ -10,17 +21,88 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-muted: var(--foreground-muted);
+  --color-subtle: var(--foreground-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-purple: var(--accent-purple);
+  --color-accent-pink-light: var(--accent-pink-light);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  border-color: var(--border);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--foreground-subtle);
+}
+
+::selection {
+  background: rgba(237, 1, 148, 0.25);
+  color: var(--foreground);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes pulse-accent {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-accent {
+  animation: pulse-accent 2s ease-in-out infinite;
+}
+
+@keyframes bell-ring {
+  0%, 55%, 100% { transform: rotate(0); }
+  5% { transform: rotate(18deg); }
+  15% { transform: rotate(-16deg); }
+  25% { transform: rotate(13deg); }
+  35% { transform: rotate(-10deg); }
+  45% { transform: rotate(6deg); }
+}
+
+.animate-bell-ring {
+  display: inline-block;
+  transform-origin: 50% 0%;
+  animation: bell-ring 3s ease-in-out infinite;
 }

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#bf00ff"/>
+      <stop offset="100%" stop-color="#ff007f"/>
+    </linearGradient>
+  </defs>
+  <circle cx="50" cy="50" r="50" fill="url(#g)"/>
+  <!-- Share icon: 3 nodes connected -->
+  <circle cx="35" cy="50" r="7" fill="white"/>
+  <circle cx="65" cy="28" r="7" fill="white"/>
+  <circle cx="65" cy="72" r="7" fill="white"/>
+  <line x1="35" y1="50" x2="65" y2="28" stroke="white" stroke-width="5" stroke-linecap="round"/>
+  <line x1="35" y1="50" x2="65" y2="72" stroke="white" stroke-width="5" stroke-linecap="round"/>
+</svg>
