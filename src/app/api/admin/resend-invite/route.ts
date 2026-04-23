@@ -35,17 +35,60 @@ export async function POST(request: NextRequest) {
     const { error: emailError } = await resend.emails.send({
       from: "rbrandr Portal <notifications@rbrandr.com>",
       to: email,
-      subject: "Set your rbrandr Portal password",
-      html: `
-        <div style="font-family: -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
-          <h2 style="color: #111; margin: 0 0 8px;">Set your password</h2>
-          <p style="color: #555; margin: 0 0 24px;">Your account manager has sent you a link to set your password for the rbrandr Portal.</p>
-          <a href="${resetUrl}" style="display: inline-block; background: #6366f1; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">
-            Set password &amp; log in
-          </a>
-          <p style="color: #999; font-size: 13px; margin-top: 24px;">This link expires in 24 hours. If you didn't expect this email, you can safely ignore it.</p>
-        </div>
-      `,
+      subject: "You've been invited to the rbrandr Portal",
+      html: `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>rbrandr Portal</title></head>
+<body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:48px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;">
+
+        <!-- Logo row -->
+        <tr><td style="padding-bottom:32px;" align="center">
+          <span style="font-size:13px;font-weight:800;letter-spacing:0.15em;color:#fafafa;text-transform:uppercase;">RBRANDRSPHERE</span>
+        </td></tr>
+
+        <!-- Card -->
+        <tr><td style="background:#111113;border:1px solid #27272a;border-radius:16px;padding:40px 36px;">
+
+          <!-- Gradient accent bar -->
+          <div style="height:3px;border-radius:2px;background:linear-gradient(90deg,#ed0194,#b400a7,#cd55c4);margin-bottom:32px;"></div>
+
+          <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#fafafa;line-height:1.3;">
+            You're invited 🎉
+          </h1>
+          <p style="margin:0 0 28px;font-size:14px;color:#a1a1aa;line-height:1.6;">
+            Your account has been set up on the <strong style="color:#fafafa;">rbrandr Client Portal</strong>. Click below to set your password and get started.
+          </p>
+
+          <!-- CTA button -->
+          <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr><td style="border-radius:8px;background:linear-gradient(135deg,#ed0194,#b400a7);">
+              <a href="${resetUrl}" style="display:inline-block;padding:13px 32px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.02em;border-radius:8px;">
+                Set password &amp; log in →
+              </a>
+            </td></tr>
+          </table>
+
+          <p style="margin:0;font-size:12px;color:#52525b;line-height:1.6;">
+            This link expires in 24 hours. If you weren't expecting this, you can safely ignore it.
+          </p>
+
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding-top:24px;" align="center">
+          <p style="margin:0;font-size:11px;color:#3f3f46;">
+            © rbrandr · Sent by rbrandr Portal
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
     });
     if (emailError) return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
   }
