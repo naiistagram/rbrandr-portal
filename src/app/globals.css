@@ -142,7 +142,7 @@ body {
   padding: 1px;
   background: linear-gradient(90deg, #ed0194, #b400a7, #cd55c4, #ed0194);
   background-size: 300% 100%;
-  animation: beta-shimmer 3s linear infinite;
+  animation: beta-shimmer 8s ease-in-out infinite;
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: destination-out;
   mask-composite: exclude;
