@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {
@@ -29,6 +31,7 @@ export default async function AdminLayout({
     <div className="flex h-full min-h-screen">
       <AdminSidebar
         user={{
+          id: profile.id,
           full_name: profile.full_name,
           email: profile.email,
           avatar_url: profile.avatar_url,

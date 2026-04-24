@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -98,6 +99,14 @@ export function Sidebar({ user, serviceType, notificationCount = 0 }: SidebarPro
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url);
+
+  useEffect(() => {
+    supabase.from("profiles").select("avatar_url").eq("id", user.id).single().then(({ data }) => {
+      if (data?.avatar_url !== undefined) setAvatarUrl(data.avatar_url);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.id]);
 
   const navItems = getNav(serviceType);
 
@@ -171,8 +180,8 @@ export function Sidebar({ user, serviceType, notificationCount = 0 }: SidebarPro
 
         <div className="flex items-center gap-3 px-3 py-2.5 mt-1">
           <div className="w-7 h-7 rounded-full bg-[var(--accent-subtle)] border border-[var(--accent)]/30 flex items-center justify-center flex-shrink-0 overflow-hidden">
-            {user.avatar_url ? (
-              <img src={user.avatar_url} alt={user.full_name} className="w-full h-full object-cover" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={user.full_name} className="w-full h-full object-cover" />
             ) : (
               <span className="text-[10px] font-bold text-[var(--accent)]">
                 {getInitials(user.full_name)}
