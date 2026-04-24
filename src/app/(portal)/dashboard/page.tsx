@@ -38,7 +38,8 @@ export default async function DashboardPage() {
   ];
 
   const projectIds = projects.map((p) => p.id);
-  // Contracts are only relevant for projects the user owns directly
+  // Contracts only for CEO-role users who own projects directly
+  const isCeo = (profile?.client_role ?? "ceo") === "ceo";
   const ownedProjectIds = ownedProjects.map((p) => p.id);
 
   const [{ data: allContent }, { data: pendingForms }, { data: pendingContracts }, { data: openTickets }] =
@@ -49,8 +50,8 @@ export default async function DashboardPage() {
       projectIds.length > 0
         ? admin.from("forms").select("*").in("project_id", projectIds).eq("status", "pending").limit(10)
         : Promise.resolve({ data: [] }),
-      // Contracts only shown for projects the user directly owns
-      ownedProjectIds.length > 0
+      // Contracts only for CEO-role, direct project owners
+      isCeo && ownedProjectIds.length > 0
         ? admin.from("contracts").select("id, title, status").in("project_id", ownedProjectIds).eq("status", "pending").limit(10)
         : Promise.resolve({ data: [] }),
       projectIds.length > 0

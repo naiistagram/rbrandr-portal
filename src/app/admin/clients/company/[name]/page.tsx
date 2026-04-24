@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import {
-  ArrowLeft, Building2, Users, FileText, Clock, CheckCircle2, XCircle,
-  BarChart3, ImageIcon, FolderOpen, BookOpen, Milestone, TicketIcon,
-  MessageSquare, ScrollText, Calendar, ExternalLink, Film, Camera,
+  ArrowLeft, Building2, Users, FileText, Clock, CheckCircle2,
+  BarChart3, ImageIcon, FolderOpen, BookOpen,
+  Ticket as TicketIcon, MessageSquare, ScrollText, ExternalLink, Film, Camera,
 } from "lucide-react";
 import { cn, formatDate, getInitials, STATUS_CONFIG } from "@/lib/utils";
 
@@ -55,7 +55,6 @@ function ClientBadge({ clientId, name, companyName }: { clientId: string; name: 
     <Link
       href={`/admin/clients/${clientId}`}
       className="inline-flex items-center gap-1 text-[10px] text-[var(--accent)] hover:underline flex-shrink-0"
-      onClick={(e) => e.stopPropagation()}
     >
       {name} <ExternalLink className="w-2.5 h-2.5" />
     </Link>

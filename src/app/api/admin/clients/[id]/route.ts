@@ -106,18 +106,30 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { admin } = auth;
 
-  const [{ data: client }, { data: allProjects }] = await Promise.all([
+  const [{ data: client }, { data: ownedProjects }, { data: memberRows }] = await Promise.all([
     admin.from("profiles").select("*").eq("id", clientId).single(),
     admin.from("projects").select("*").eq("client_id", clientId).order("created_at", { ascending: false }),
+    admin.from("project_members").select("project_id").eq("user_id", clientId),
   ]);
 
   if (!client) return NextResponse.json({ error: "Client not found" }, { status: 404 });
 
+  // Include projects the client is a member of (e.g. invited team members)
+  const ownedIds = new Set((ownedProjects ?? []).map((p) => p.id));
+  const memberProjectIds = (memberRows ?? []).map((r) => r.project_id).filter((id) => !ownedIds.has(id));
 
-  const project = allProjects?.[0] ?? null;
-  const projectIds = (allProjects ?? []).map((p) => p.id);
+  const { data: memberProjects } = memberProjectIds.length > 0
+    ? await admin.from("projects").select("*").in("id", memberProjectIds).order("created_at", { ascending: false })
+    : { data: [] };
+
+  const allProjects = [...(ownedProjects ?? []), ...(memberProjects ?? [])];
+  const project = allProjects[0] ?? null;
+  const projectIds = allProjects.map((p) => p.id);
+  // Contracts are only shown for projects the client directly owns
+  const ownedProjectIds = (ownedProjects ?? []).map((p) => p.id);
 
   const hasProjects = projectIds.length > 0;
+  const hasOwned = ownedProjectIds.length > 0;
 
   const [
     { data: content }, { data: contracts }, { data: reports },
@@ -127,8 +139,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     hasProjects
       ? admin.from("content_items").select("*").in("project_id", projectIds).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
-    hasProjects
-      ? admin.from("contracts").select("*").in("project_id", projectIds).order("created_at", { ascending: false })
+    // Contracts only for owned projects (members can't see contracts)
+    hasOwned
+      ? admin.from("contracts").select("*").in("project_id", ownedProjectIds).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
     hasProjects
       ? admin.from("reports").select("*").in("project_id", projectIds).order("created_at", { ascending: false })
@@ -151,7 +164,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   return NextResponse.json({
     client,
-    projects: allProjects ?? [],
+    projects: allProjects,
     project,
     content: content ?? [],
     contracts: contracts ?? [],
