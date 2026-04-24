@@ -89,6 +89,7 @@ export default function ClientDetailPage() {
   const [savingServiceType, setSavingServiceType] = useState(false);
   const [clientRoleState, setClientRoleState] = useState<"ceo" | "member">("ceo");
   const [jobTitleState, setJobTitleState] = useState("");
+  const [companyNameState, setCompanyNameState] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
@@ -233,6 +234,7 @@ export default function ClientDetailPage() {
     setClientServiceType(data.client?.service_type ?? "social_media");
     setClientRoleState(data.client?.client_role ?? "ceo");
     setJobTitleState(data.client?.job_title ?? "");
+    setCompanyNameState(data.client?.company_name ?? "");
     setAllProjects(data.projects ?? []);
     if (data.project) {
       setProject(data.project);
@@ -343,7 +345,7 @@ export default function ClientDetailPage() {
     setSavingServiceType(false);
   }
 
-  async function handleSaveClientProfile(fields: { client_role?: string; job_title?: string }) {
+  async function handleSaveClientProfile(fields: { client_role?: string; job_title?: string; company_name?: string }) {
     setSavingProfile(true);
     await fetch(`/api/admin/clients/${clientId}`, {
       method: "PATCH",
@@ -973,7 +975,14 @@ export default function ClientDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-[var(--foreground-subtle)] mb-1">Company</p>
-                <p className="text-sm text-[var(--foreground)]">{client.company_name ?? "—"}</p>
+                <input
+                  type="text"
+                  value={companyNameState}
+                  onChange={(e) => setCompanyNameState(e.target.value)}
+                  onBlur={() => handleSaveClientProfile({ company_name: companyNameState })}
+                  placeholder="e.g. Acme Ltd."
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all w-full placeholder:text-[var(--foreground-subtle)]"
+                />
               </div>
               <div>
                 <p className="text-xs text-[var(--foreground-subtle)] mb-1">Joined</p>

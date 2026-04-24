@@ -83,12 +83,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
-  const { service_type, client_role, job_title } = body;
+  const { service_type, client_role, job_title, company_name } = body;
 
   const updates: Record<string, unknown> = {};
   if (service_type !== undefined) updates.service_type = service_type;
   if (client_role !== undefined) updates.client_role = client_role;
   if (job_title !== undefined) updates.job_title = job_title?.trim() || null;
+  if (company_name !== undefined) updates.company_name = company_name?.trim() || null;
 
   if (Object.keys(updates).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 

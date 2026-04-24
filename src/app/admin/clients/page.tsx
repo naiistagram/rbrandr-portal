@@ -143,15 +143,30 @@ export default function AdminClientsPage() {
 
               return groups.map((group) => (
                 <div key={group.company ?? "__individual__"} className="space-y-2">
-                  {group.company && (
-                    <div className="flex items-center gap-2 px-1">
-                      <Building2 className="w-3.5 h-3.5 text-[var(--foreground-subtle)]" />
-                      <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">{group.company}</p>
-                      {group.clients.length > 1 && (
+                  <div className="flex items-center gap-2 px-1">
+                    <Building2 className="w-3.5 h-3.5 text-[var(--foreground-subtle)]" />
+                    {group.company ? (
+                      <>
+                        <Link
+                          href={`/admin/clients/company/${encodeURIComponent(group.company)}`}
+                          className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider hover:text-[var(--accent)] transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {group.company}
+                        </Link>
                         <span className="text-[10px] text-[var(--foreground-subtle)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded-full">{group.clients.length}</span>
-                      )}
-                    </div>
-                  )}
+                        <Link
+                          href={`/admin/clients/company/${encodeURIComponent(group.company)}`}
+                          className="ml-auto text-[10px] text-[var(--accent)] hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Company view →
+                        </Link>
+                      </>
+                    ) : (
+                      <p className="text-xs font-semibold text-[var(--foreground-subtle)] uppercase tracking-wider">No company</p>
+                    )}
+                  </div>
                   {group.clients.map((client) => (
                     <Link
                       key={client.id}
