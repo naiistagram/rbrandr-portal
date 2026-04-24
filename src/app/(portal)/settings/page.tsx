@@ -83,12 +83,13 @@ export default function SettingsPage() {
       avatarUrl = urlData.publicUrl;
     }
 
-    await supabase.from("profiles").update({
-      full_name: form.fullName,
-      company_name: form.company || null,
-      avatar_url: avatarUrl,
-    }).eq("id", profile.id);
+    await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ full_name: form.fullName, company_name: form.company, avatar_url: avatarUrl }),
+    });
 
+    setProfile((p) => p ? { ...p, full_name: form.fullName, company_name: form.company || null, avatar_url: avatarUrl } : p);
     setSaved(true);
     setSaving(false);
     setTimeout(() => setSaved(false), 2500);

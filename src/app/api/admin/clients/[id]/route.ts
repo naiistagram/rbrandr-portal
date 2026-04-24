@@ -61,6 +61,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ content: data });
   }
 
+  if (action === "reply_feedback") {
+    const { feedback_id, reply } = body;
+    if (!feedback_id) return NextResponse.json({ error: "feedback_id required" }, { status: 400 });
+    const { data, error } = await auth.admin
+      .from("feedback")
+      .update({ admin_reply: reply || null })
+      .eq("id", feedback_id)
+      .select()
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ feedback: data });
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }
 

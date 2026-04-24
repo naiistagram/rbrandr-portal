@@ -618,10 +618,16 @@ export default function ClientDetailPage() {
   async function saveFeedbackReply(id: string) {
     const reply = feedbackReplies[id] ?? "";
     setSavingReply(id);
-    await supabase.from("feedback").update({ admin_reply: reply || null }).eq("id", id);
-    setFeedbackItems((prev) => prev.map((f) => f.id === id ? { ...f, admin_reply: reply || null } : f));
-    setReplySaved((prev) => ({ ...prev, [id]: true }));
-    setTimeout(() => setReplySaved((prev) => ({ ...prev, [id]: false })), 3000);
+    const res = await fetch(`/api/admin/clients/${clientId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "reply_feedback", feedback_id: id, reply }),
+    });
+    if (res.ok) {
+      setFeedbackItems((prev) => prev.map((f) => f.id === id ? { ...f, admin_reply: reply || null } : f));
+      setReplySaved((prev) => ({ ...prev, [id]: true }));
+      setTimeout(() => setReplySaved((prev) => ({ ...prev, [id]: false })), 3000);
+    }
     setSavingReply(null);
   }
 

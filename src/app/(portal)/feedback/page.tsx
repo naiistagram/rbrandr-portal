@@ -46,14 +46,13 @@ export default function FeedbackPage() {
     e.preventDefault();
     if (!message) return;
     setSubmitting(true);
-    const { data } = await supabase.from("feedback").insert({
-      project_id: projectId,
-      submitted_by: userId,
-      rating: rating || null,
-      message,
-      category,
-    }).select().single();
-    if (data) setFeedbacks((prev) => [data, ...prev]);
+    const res = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project_id: projectId, rating: rating || null, message, category }),
+    });
+    const json = await res.json();
+    if (res.ok && json.feedback) setFeedbacks((prev) => [json.feedback, ...prev]);
     setRating(0);
     setMessage("");
     setCategory("general");
