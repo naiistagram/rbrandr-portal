@@ -125,7 +125,7 @@ export default function ClientDetailPage() {
   type MemberRow = { id: string; user_id: string; created_at: string; profiles: { id: string; full_name: string; email: string; avatar_url: string | null; client_role: string } };
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [showAddMember, setShowAddMember] = useState(false);
-  const [memberForm, setMemberForm] = useState({ fullName: "", email: "" });
+  const [memberForm, setMemberForm] = useState({ fullName: "", email: "", jobTitle: "" });
   const [addingMember, setAddingMember] = useState(false);
   const [addMemberError, setAddMemberError] = useState("");
   const [addMemberSuccess, setAddMemberSuccess] = useState("");
@@ -290,7 +290,7 @@ export default function ClientDetailPage() {
     setAddingMember(false);
     if (!res.ok) { setAddMemberError(data.error ?? "Failed to add member."); return; }
     setAddMemberSuccess(`Invitation sent to ${memberForm.email}`);
-    setMemberForm({ fullName: "", email: "" });
+    setMemberForm({ fullName: "", email: "", jobTitle: "" });
     fetchMembers();
   }
 
@@ -300,6 +300,16 @@ export default function ClientDetailPage() {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ membershipId, userId }),
+    });
+    fetchMembers();
+  }
+
+  async function handleToggleRole(userId: string, currentRole: string) {
+    const newRole = currentRole === "ceo" ? "member" : "ceo";
+    await fetch(`/api/admin/clients/${clientId}/members`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, clientRole: newRole }),
     });
     fetchMembers();
   }
@@ -1253,9 +1263,22 @@ export default function ClientDetailPage() {
                         <p className="text-sm font-medium text-[var(--foreground)] truncate">{m.profiles?.full_name}</p>
                         <p className="text-xs text-[var(--foreground-subtle)] truncate">{m.profiles?.email}</p>
                       </div>
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-400 flex-shrink-0">
-                        member
-                      </span>
+                      {(m.profiles as { job_title?: string })?.job_title && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20 flex-shrink-0 max-w-[120px] truncate">
+                          {(m.profiles as { job_title?: string }).job_title}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => handleToggleRole(m.user_id, m.profiles?.client_role ?? "member")}
+                        title="Click to toggle role"
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 cursor-pointer transition-all ${
+                          m.profiles?.client_role === "ceo"
+                            ? "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
+                            : "bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"
+                        }`}
+                      >
+                        {m.profiles?.client_role === "ceo" ? "CEO" : "member"}
+                      </button>
                       <button
                         onClick={() => handleRemoveMember(m.id, m.user_id)}
                         className="w-6 h-6 flex items-center justify-center text-[var(--foreground-subtle)] hover:text-red-400 transition-colors cursor-pointer flex-shrink-0"
@@ -1293,6 +1316,13 @@ export default function ClientDetailPage() {
                           value={memberForm.email}
                           onChange={(e) => setMemberForm((f) => ({ ...f, email: e.target.value }))}
                           className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Role / job title (optional)"
+                          value={memberForm.jobTitle}
+                          onChange={(e) => setMemberForm((f) => ({ ...f, jobTitle: e.target.value }))}
+                          className="col-span-2 px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
                         />
                       </div>
                       {addMemberError && <p className="text-xs text-red-400">{addMemberError}</p>}

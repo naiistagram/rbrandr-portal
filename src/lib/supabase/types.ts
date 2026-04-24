@@ -8,6 +8,7 @@ export interface Profile {
   avatar_url: string | null;
   role: "admin" | "client";
   client_role: "ceo" | "member";
+  job_title: string | null;
   company_name: string | null;
   service_type: "website" | "marketing" | "both" | "social_media" | "brand";
   created_at: string;

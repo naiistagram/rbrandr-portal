@@ -31,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: memberships } = await admin
     .from("project_members")
-    .select("id, user_id, created_at, profiles(id, full_name, email, avatar_url, client_role)")
+    .select("id, user_id, created_at, profiles(id, full_name, email, avatar_url, client_role, job_title)")
     .eq("project_id", project.id)
     .order("created_at", { ascending: true });
 
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const admin = await assertAdmin();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { fullName, email } = await req.json();
+  const { fullName, email, jobTitle } = await req.json();
   if (!fullName || !email) return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
 
   // Find the client's primary project
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     full_name: fullName,
     role: "client",
     client_role: "member",
+    job_title: jobTitle?.trim() || null,
     avatar_url: null,
     company_name: null,
   }, { ignoreDuplicates: false });
@@ -92,6 +93,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   return NextResponse.json({ userId: inviteData.user.id });
+}
+
+// PATCH /api/admin/clients/[id]/members — update a member's client_role
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  await params;
+  const admin = await assertAdmin();
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const { userId, clientRole } = await req.json();
+  if (!userId || !clientRole) return NextResponse.json({ error: "userId and clientRole are required." }, { status: 400 });
+  if (!["ceo", "member"].includes(clientRole)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
+
+  const { error } = await admin.from("profiles").update({ client_role: clientRole }).eq("id", userId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }
 
 // DELETE /api/admin/clients/[id]/members — remove a team member by membership id

@@ -3,12 +3,16 @@
 -- Run this once in your Supabase SQL editor (Dashboard → SQL Editor → New Query)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 1. Add client_role to profiles
+-- 1. Add client_role and job_title to profiles
 --    'ceo'    = primary account holder, can see everything including contracts
 --    'member' = additional team member, cannot see contracts
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS client_role text NOT NULL DEFAULT 'ceo'
   CHECK (client_role IN ('ceo', 'member'));
+
+-- job_title is a display label for team members (e.g. "Marketing Manager", "Designer")
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS job_title text DEFAULT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. Create project_members table
