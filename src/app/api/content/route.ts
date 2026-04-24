@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminEmails, getProjectMemberEmails, buildEmailHtml, sendPortalEmail } from "@/lib/email";
 
 async function getAuthenticatedUser() {
   const supabase = await createClient();
@@ -123,6 +124,36 @@ export async function PATCH(request: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (status === "in_review") {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const [adminEmails, memberEmails] = await Promise.all([
+      getAdminEmails(),
+      getProjectMemberEmails(data.project_id),
+    ]);
+    await Promise.all([
+      sendPortalEmail({
+        to: adminEmails,
+        subject: `Content ready for review — ${data.title}`,
+        html: buildEmailHtml({
+          title: "Content submitted for review",
+          body: `A client has submitted <strong style="color:#fafafa;">"${data.title}"</strong> for review. Head to the admin portal to approve or provide feedback.`,
+          ctaText: "Review content",
+          ctaUrl: `${appUrl}/admin/clients`,
+        }),
+      }),
+      sendPortalEmail({
+        to: memberEmails,
+        subject: `Content submitted for review — ${data.title}`,
+        html: buildEmailHtml({
+          title: "Content submitted for review",
+          body: `Your content piece <strong style="color:#fafafa;">"${data.title}"</strong> has been submitted for review. You'll hear back once your account manager has taken a look.`,
+          ctaText: "View content",
+          ctaUrl: `${appUrl}/calendar`,
+        }),
+      }),
+    ]);
+  }
 
   return NextResponse.json({ content: data });
 }

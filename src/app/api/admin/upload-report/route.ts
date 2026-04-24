@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getProjectMemberEmails, buildEmailHtml, sendPortalEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -51,6 +52,19 @@ export async function POST(request: NextRequest) {
       link: "/reports",
     });
   }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const memberEmails = await getProjectMemberEmails(projectId);
+  await sendPortalEmail({
+    to: memberEmails,
+    subject: `Your ${period} report is ready`,
+    html: buildEmailHtml({
+      title: "Your report is ready",
+      body: `Your <strong style="color:#fafafa;">${period}</strong> report — <strong style="color:#fafafa;">"${title}"</strong> — has been uploaded and is available to view in your portal.`,
+      ctaText: "View report",
+      ctaUrl: `${appUrl}/reports`,
+    }),
+  });
 
   return NextResponse.json({ report: data });
 }

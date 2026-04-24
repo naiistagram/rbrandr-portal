@@ -535,22 +535,30 @@ export default function ClientDetailPage() {
     e.preventDefault();
     if (!project || !msForm.title || !msForm.due_date) return;
     setAddingMs(true);
-    const { data } = await supabase.from("milestones").insert({
-      project_id: project.id,
-      client_id: clientId,
-      title: msForm.title,
-      description: msForm.description || null,
-      due_date: msForm.due_date,
-      completed: false,
-    }).select().single();
-    if (data) setMilestones((prev) => [...prev, data].sort((a, b) => a.due_date.localeCompare(b.due_date)));
+    const res = await fetch("/api/admin/milestones", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: project.id,
+        client_id: clientId,
+        title: msForm.title,
+        description: msForm.description || null,
+        due_date: msForm.due_date,
+      }),
+    });
+    const json = await res.json();
+    if (json.milestone) setMilestones((prev) => [...prev, json.milestone].sort((a, b) => a.due_date.localeCompare(b.due_date)));
     setMsForm({ title: "", description: "", due_date: "" });
     setShowMilestoneForm(false);
     setAddingMs(false);
   }
 
   async function toggleMilestone(id: string, completed: boolean) {
-    await supabase.from("milestones").update({ completed }).eq("id", id);
+    await fetch("/api/admin/milestones", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, completed }),
+    });
     setMilestones((prev) => prev.map((m) => m.id === id ? { ...m, completed } : m));
   }
 
@@ -565,15 +573,19 @@ export default function ClientDetailPage() {
       required: f.required ?? false,
       options: (f.type === "select" || f.type === "multiselect" || f.type === "checkbox") && f.options ? f.options.split(",").map((o) => o.trim()).filter(Boolean) : undefined,
     }));
-    const { data } = await supabase.from("forms").insert({
-      project_id: project.id,
-      client_id: clientId,
-      title: fbTitle,
-      description: fbDescription || null,
-      fields,
-      status: "pending",
-    }).select().single();
-    if (data) setForms((prev) => [data, ...prev]);
+    const res = await fetch("/api/admin/forms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: project.id,
+        client_id: clientId,
+        title: fbTitle,
+        description: fbDescription || null,
+        fields,
+      }),
+    });
+    const json = await res.json();
+    if (json.form) setForms((prev) => [json.form, ...prev]);
     setFbTitle("");
     setFbDescription("");
     setFbFields([]);
@@ -784,16 +796,14 @@ export default function ClientDetailPage() {
   }
 
   async function handleUpdateContentStatus(itemId: string, newStatus: ContentItem["status"]) {
-    await supabase.from("content_items").update({ status: newStatus }).eq("id", itemId);
-    await supabase.from("notifications").insert({
-      user_id: clientId,
-      title: "Content Status Updated",
-      message: `Your content has been moved to ${STATUS_CONFIG[newStatus]?.label ?? newStatus}`,
-      type: "content",
-      read: false,
-      link: "/calendar",
+    const res = await fetch("/api/admin/content-status", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, status: newStatus, clientId }),
     });
-    setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, status: newStatus } : c));
+    if (res.ok) {
+      setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, status: newStatus } : c));
+    }
   }
 
   async function handleUpdateContentDate(itemId: string, newDate: string) {
