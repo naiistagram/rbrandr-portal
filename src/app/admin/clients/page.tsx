@@ -120,30 +120,62 @@ export default function AdminClientsPage() {
             )}
           </div>
         ) : (
-          <div className="space-y-2">
-            {filtered.map((client) => (
-              <Link
-                key={client.id}
-                href={`/admin/clients/${client.id}`}
-                className="flex items-center gap-4 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-xl hover:border-zinc-600 transition-all"
-              >
-                <div className="w-10 h-10 rounded-full bg-[var(--accent-subtle)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden text-sm font-bold text-[var(--accent)]">
-                  {client.avatar_url ? (
-                    <img src={client.avatar_url} alt={client.full_name} className="w-full h-full object-cover" />
-                  ) : (
-                    getInitials(client.full_name)
+          <div className="space-y-5">
+            {(() => {
+              // Group by company_name; null company = individual
+              const groups: { company: string | null; clients: Profile[] }[] = [];
+              const seen = new Map<string, number>();
+              for (const c of filtered) {
+                const key = c.company_name ?? "";
+                if (seen.has(key)) {
+                  groups[seen.get(key)!].clients.push(c);
+                } else {
+                  seen.set(key, groups.length);
+                  groups.push({ company: c.company_name ?? null, clients: [c] });
+                }
+              }
+              // Sort: companies with most clients first; null company last
+              groups.sort((a, b) => {
+                if (!a.company && b.company) return 1;
+                if (a.company && !b.company) return -1;
+                return (a.company ?? "").localeCompare(b.company ?? "");
+              });
+
+              return groups.map((group) => (
+                <div key={group.company ?? "__individual__"} className="space-y-2">
+                  {group.company && (
+                    <div className="flex items-center gap-2 px-1">
+                      <Building2 className="w-3.5 h-3.5 text-[var(--foreground-subtle)]" />
+                      <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">{group.company}</p>
+                      {group.clients.length > 1 && (
+                        <span className="text-[10px] text-[var(--foreground-subtle)] bg-[var(--surface-2)] px-1.5 py-0.5 rounded-full">{group.clients.length}</span>
+                      )}
+                    </div>
                   )}
+                  {group.clients.map((client) => (
+                    <Link
+                      key={client.id}
+                      href={`/admin/clients/${client.id}`}
+                      className="flex items-center gap-4 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-xl hover:border-zinc-600 transition-all"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-[var(--accent-subtle)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden text-sm font-bold text-[var(--accent)]">
+                        {client.avatar_url ? (
+                          <img src={client.avatar_url} alt={client.full_name} className="w-full h-full object-cover" />
+                        ) : (
+                          getInitials(client.full_name)
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-[var(--foreground)]">{client.full_name}</p>
+                        <p className="text-xs text-[var(--foreground-subtle)] truncate">{client.email}</p>
+                      </div>
+                      <p className="text-xs text-[var(--foreground-subtle)] hidden md:block">{formatDate(client.created_at)}</p>
+                      <ArrowRight className="w-4 h-4 text-[var(--foreground-subtle)] flex-shrink-0" />
+                    </Link>
+                  ))}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-[var(--foreground)]">{client.full_name}</p>
-                  <p className="text-xs text-[var(--foreground-subtle)] truncate">
-                    {client.company_name ? `${client.company_name} · ${client.email}` : client.email}
-                  </p>
-                </div>
-                <p className="text-xs text-[var(--foreground-subtle)] hidden md:block">{formatDate(client.created_at)}</p>
-                <ArrowRight className="w-4 h-4 text-[var(--foreground-subtle)] flex-shrink-0" />
-              </Link>
-            ))}
+              ));
+            })()}
           </div>
         )}
       </div>

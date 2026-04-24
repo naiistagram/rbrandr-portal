@@ -1328,11 +1328,15 @@ export default function ClientDetailPage() {
                         <p className="text-sm font-medium text-[var(--foreground)] truncate">{m.profiles?.full_name}</p>
                         <p className="text-xs text-[var(--foreground-subtle)] truncate">{m.profiles?.email}</p>
                       </div>
-                      {(m.profiles as { job_title?: string })?.job_title && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20 flex-shrink-0 max-w-[120px] truncate">
-                          {(m.profiles as { job_title?: string }).job_title}
-                        </span>
-                      )}
+                      {(() => {
+                        const jt = (m.profiles as { job_title?: string })?.job_title;
+                        const roleLabel = m.profiles?.client_role === "ceo" ? "ceo" : "member";
+                        return jt && jt.toLowerCase() !== roleLabel ? (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20 flex-shrink-0 max-w-[120px] truncate">
+                            {jt}
+                          </span>
+                        ) : null;
+                      })()}
                       <button
                         onClick={() => handleToggleRole(m.user_id, m.profiles?.client_role ?? "member")}
                         title="Click to toggle role"
