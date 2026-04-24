@@ -1,22 +1,37 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
+import { Bell } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, getInitials } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import type { Notification } from "@/lib/supabase/types";
+import { CommandPalette } from "@/components/ui/command-palette";
 
 interface TopbarProps {
   title: string;
   subtitle?: string;
   userId: string;
+  avatarUrl?: string | null;
+  fullName?: string;
 }
 
-export function Topbar({ title, subtitle, userId }: TopbarProps) {
+export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullName: nameProp }: TopbarProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(avatarProp ?? null);
+  const [fullName, setFullName] = useState<string>(nameProp ?? "");
   const supabase = createClient();
+
+  useEffect(() => {
+    if (!avatarProp && !nameProp && userId) {
+      supabase.from("profiles").select("avatar_url, full_name").eq("id", userId).single().then(({ data }) => {
+        if (data) { setAvatarUrl(data.avatar_url); setFullName(data.full_name); }
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   useEffect(() => {
     fetchNotifications();
@@ -73,7 +88,10 @@ export function Topbar({ title, subtitle, userId }: TopbarProps) {
         {subtitle && <p className="text-xs text-[var(--foreground-subtle)]">{subtitle}</p>}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
+        {/* Search trigger */}
+        <CommandPalette />
+
         {/* Notification bell */}
         <div className="relative">
           <button
@@ -134,6 +152,20 @@ export function Topbar({ title, subtitle, userId }: TopbarProps) {
             </div>
           )}
         </div>
+        {/* Avatar */}
+        {(avatarUrl || fullName) && (
+          <Link href="/settings" title="Profile settings">
+            <div className="w-8 h-8 rounded-full bg-[var(--accent-subtle)] border-2 border-[var(--accent)]/30 hover:border-[var(--accent)]/60 flex items-center justify-center overflow-hidden transition-all cursor-pointer flex-shrink-0">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={fullName ?? ""} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[10px] font-bold text-[var(--accent)]">
+                  {getInitials(fullName ?? "")}
+                </span>
+              )}
+            </div>
+          </Link>
+        )}
       </div>
     </header>
   );
