@@ -122,16 +122,17 @@ export default function AdminClientsPage() {
         ) : (
           <div className="space-y-5">
             {(() => {
-              // Group by company_name; null company = individual
+              // Group by company_name; normalize key to merge "ACME" / "acme " / " ACME" etc.
               const groups: { company: string | null; clients: Profile[] }[] = [];
               const seen = new Map<string, number>();
               for (const c of filtered) {
-                const key = c.company_name ?? "";
-                if (seen.has(key)) {
+                const raw = c.company_name?.trim() ?? null;
+                const key = raw?.toLowerCase() ?? "";
+                if (raw && seen.has(key)) {
                   groups[seen.get(key)!].clients.push(c);
                 } else {
                   seen.set(key, groups.length);
-                  groups.push({ company: c.company_name ?? null, clients: [c] });
+                  groups.push({ company: raw, clients: [c] });
                 }
               }
               // Sort: companies with most clients first; null company last
