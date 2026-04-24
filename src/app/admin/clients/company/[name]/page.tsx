@@ -326,56 +326,129 @@ export default async function CompanyPage({
         )}
 
         {/* ── CONTENT ── */}
-        {tab === "Content" && (
-          <div className="space-y-2">
-            {(content ?? []).length === 0 ? <EmptyState label="No content yet." /> : (
-              (content ?? []).map((item) => {
-                const i = item as typeof item & { profiles?: { full_name: string } | null };
-                const cfg = STATUS_CONFIG[i.status as keyof typeof STATUS_CONFIG];
-                const proj = projectMap[(i as { project_id: string }).project_id];
-                const owner = proj ? clientMap[proj.client_id] : null;
-                const Icon = contentIcon(i.content_type ?? "post");
+        {tab === "Content" && (() => {
+          type ContentRow = { id: string; title: string; status: string; updated_at: string; platform?: string | null; content_type?: string | null; file_urls?: string[] | null; project_id: string; profiles?: { full_name: string } | null };
+          const allContent = (content ?? []) as ContentRow[];
+          if (allContent.length === 0) return <EmptyState label="No content yet." />;
+
+          // Stats
+          const counts = {
+            draft: allContent.filter((i) => i.status === "draft").length,
+            in_review: allContent.filter((i) => i.status === "in_review").length,
+            approved: allContent.filter((i) => i.status === "approved").length,
+            rejected: allContent.filter((i) => i.status === "rejected").length,
+            published: allContent.filter((i) => i.status === "published").length,
+          };
+
+          // Group by platform
+          const PLATFORM_ORDER = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
+          const platformGroups: Record<string, typeof allContent> = {};
+          for (const item of allContent) {
+            const plat = (item as { platform?: string | null }).platform ?? "Other";
+            if (!platformGroups[plat]) platformGroups[plat] = [];
+            platformGroups[plat].push(item);
+          }
+          const sortedPlatforms = [
+            ...PLATFORM_ORDER.filter((p) => platformGroups[p]),
+            ...Object.keys(platformGroups).filter((p) => !PLATFORM_ORDER.includes(p)),
+          ];
+
+          const PLATFORM_DOT: Record<string, string> = {
+            Instagram: "bg-gradient-to-br from-purple-500 to-pink-500",
+            Facebook: "bg-blue-500",
+            TikTok: "bg-rose-500",
+            LinkedIn: "bg-sky-500",
+            "Twitter/X": "bg-zinc-400",
+            YouTube: "bg-red-500",
+            Email: "bg-emerald-500",
+            Blog: "bg-amber-500",
+          };
+
+          return (
+            <div className="space-y-6">
+              {/* Stats row */}
+              <div className="grid grid-cols-5 gap-3">
+                {(["draft", "in_review", "approved", "rejected", "published"] as const).map((s) => {
+                  const cfg = STATUS_CONFIG[s];
+                  return (
+                    <div key={s} className="bg-[var(--surface)] border border-[var(--border)] rounded-xl py-3 px-4">
+                      <p className={cn("text-xl font-bold", cfg?.color ?? "text-zinc-400")}>{counts[s]}</p>
+                      <p className="text-xs text-[var(--foreground-subtle)] mt-0.5">{cfg?.label ?? s}</p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Platform groups */}
+              {sortedPlatforms.map((platform) => {
+                const items = platformGroups[platform];
+                const dot = PLATFORM_DOT[platform] ?? "bg-zinc-500";
                 return (
-                  <Link
-                    key={i.id}
-                    href={`/admin/clients/${proj?.client_id}?tab=Content`}
-                    className="flex items-center gap-3 p-3 bg-[var(--surface)] border border-[var(--border)] rounded-lg hover:border-zinc-600 transition-all"
-                  >
-                    <Icon className="w-4 h-4 flex-shrink-0 text-[var(--foreground-subtle)]" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--foreground)] truncate">{i.title}</p>
-                      <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                        <span className="text-[10px] text-[var(--foreground-subtle)]">{proj?.name}</span>
-                        {i.profiles?.full_name && (
-                          <span className="text-[10px] text-[var(--foreground-subtle)]">by {i.profiles.full_name}</span>
-                        )}
-                        <span className="text-[10px] text-[var(--foreground-subtle)]">{formatDate(i.updated_at)}</span>
-                      </div>
+                  <div key={platform} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0", dot)} />
+                      <h3 className="text-sm font-semibold text-[var(--foreground)]">{platform}</h3>
+                      <span className="text-[10px] bg-[var(--surface-2)] text-[var(--foreground-subtle)] px-1.5 py-0.5 rounded-full">{items.length}</span>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {i.content_type && (
-                        <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", TYPE_PILL[i.content_type] ?? "bg-zinc-500/15 text-zinc-400")}>
-                          {i.content_type}
-                        </span>
-                      )}
-                      {i.platform && (
-                        <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full border", PLATFORM_PILL[i.platform] ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
-                          {i.platform}
-                        </span>
-                      )}
-                      <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-400/10", cfg?.color ?? "text-zinc-400")}>
-                        {cfg?.label ?? i.status}
-                      </span>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {items.map((item) => {
+                        const proj = projectMap[(item as { project_id: string }).project_id];
+                        const owner = proj ? clientMap[proj.client_id] : null;
+                        const cfg = STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG];
+                        const Icon = contentIcon((item as { content_type?: string }).content_type ?? "post");
+                        const urls: string[] = (item as { file_urls?: string[] | null }).file_urls ?? [];
+                        const thumb = urls[0];
+                        const isImg = thumb && isImage(thumb);
+                        return (
+                          <Link
+                            key={item.id}
+                            href={`/admin/clients/${proj?.client_id}?tab=Content`}
+                            className="bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:border-zinc-600 transition-all group"
+                          >
+                            {/* Thumbnail */}
+                            <div className="relative aspect-video bg-[var(--surface-2)] flex items-center justify-center overflow-hidden">
+                              {isImg ? (
+                                <img src={thumb} alt={item.title} className="w-full h-full object-cover" />
+                              ) : (
+                                <Icon className="w-6 h-6 text-[var(--foreground-subtle)]" />
+                              )}
+                              <span className={cn(
+                                "absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-900/80",
+                                cfg?.color ?? "text-zinc-400"
+                              )}>
+                                {cfg?.label ?? item.status}
+                              </span>
+                            </div>
+                            {/* Info */}
+                            <div className="p-3 space-y-1">
+                              <p className="text-xs font-semibold text-[var(--foreground)] truncate">{item.title}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {(item as { content_type?: string }).content_type && (
+                                  <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full", TYPE_PILL[(item as { content_type: string }).content_type] ?? "bg-zinc-500/15 text-zinc-400")}>
+                                    {(item as { content_type: string }).content_type}
+                                  </span>
+                                )}
+                                {item.profiles?.full_name && (
+                                  <span className="text-[10px] text-[var(--foreground-subtle)]">by {item.profiles.full_name}</span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-[var(--foreground-subtle)]">{formatDate(item.updated_at)}</p>
+                              {owner && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-[var(--accent)]">
+                                  {owner.full_name} <ExternalLink className="w-2.5 h-2.5" />
+                                </span>
+                              )}
+                            </div>
+                          </Link>
+                        );
+                      })}
                     </div>
-                    {owner && (
-                      <ClientBadge clientId={owner.id} name={owner.full_name} companyName={companyName} />
-                    )}
-                  </Link>
+                  </div>
                 );
-              })
-            )}
-          </div>
-        )}
+              })}
+            </div>
+          );
+        })()}
 
         {/* ── ASSETS ── */}
         {tab === "Assets" && (

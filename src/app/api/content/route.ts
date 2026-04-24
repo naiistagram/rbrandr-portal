@@ -82,6 +82,23 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
 
+  // Email all admins when a client submits new content
+  try {
+    const { data: submitter } = await admin.from("profiles").select("full_name").eq("id", user.id).single();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const adminEmails = await getAdminEmails();
+    await sendPortalEmail({
+      to: adminEmails,
+      subject: `New content submitted — ${data.title}`,
+      html: buildEmailHtml({
+        title: "New content submitted",
+        body: `<strong style="color:#fafafa;">${submitter?.full_name ?? "A client"}</strong> has submitted new content: <strong style="color:#fafafa;">"${data.title}"</strong>${data.platform ? ` on ${data.platform}` : ""}.`,
+        ctaText: "Review in admin",
+        ctaUrl: `${appUrl}/admin/clients`,
+      }),
+    });
+  } catch (_) {}
+
   return NextResponse.json({ content: data });
 }
 

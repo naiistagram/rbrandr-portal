@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+// Note: project/asset DB queries go through API routes to bypass RLS for member access
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Topbar } from "@/components/layout/topbar";
@@ -53,21 +54,20 @@ export default function AssetsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
-
-      const { data: projects } = await supabase.from("projects").select("id").order("created_at", { ascending: true });
-      const ids = (projects ?? []).map((p) => p.id);
-      setProjectIds(ids);
-      if (ids.length > 0) setProjectId(ids[0]);
-      fetchAssets(ids);
+      fetchAssets();
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchAssets(projectIds: string[]) {
-    if (projectIds.length === 0) return;
-    const { data } = await supabase.from("assets").select("*").in("project_id", projectIds).order("created_at", { ascending: false });
-    if (data) setAssets(data);
+  async function fetchAssets() {
+    const res = await fetch("/api/assets");
+    if (!res.ok) return;
+    const data = await res.json();
+    setAssets(data.assets ?? []);
+    const ids: string[] = data.projectIds ?? [];
+    setProjectIds(ids);
+    if (ids.length > 0 && !projectId) setProjectId(ids[0]);
   }
 
   const onDrop = useCallback(
@@ -90,21 +90,24 @@ export default function AssetsPage() {
 
         const { data: urlData } = supabase.storage.from("assets").getPublicUrl(path);
 
-        await supabase.from("assets").insert({
-          project_id: projectId,
-          uploaded_by: userId,
-          name: file.name,
-          file_url: urlData.publicUrl,
-          file_type: file.type,
-          file_size: file.size,
-          category: uploadCategory,
+        await fetch("/api/assets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            name: file.name,
+            file_url: urlData.publicUrl,
+            file_type: file.type,
+            file_size: file.size,
+            category: uploadCategory,
+          }),
         });
       }
 
-      await fetchAssets(projectIds);
+      await fetchAssets();
       setUploading(false);
     },
-    [projectId, userId, supabase]
+    [projectId, userId, uploadCategory, supabase]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -125,7 +128,7 @@ export default function AssetsPage() {
   async function deleteAsset(asset: Asset) {
     const path = asset.file_url.split("/storage/v1/object/public/assets/")[1];
     if (path) await supabase.storage.from("assets").remove([path]);
-    await supabase.from("assets").delete().eq("id", asset.id);
+    await fetch(`/api/assets?id=${asset.id}`, { method: "DELETE" });
     setAssets((prev) => prev.filter((a) => a.id !== asset.id));
   }
 
