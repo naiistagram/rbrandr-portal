@@ -129,6 +129,7 @@ export default function ClientDetailPage() {
   const [addingMember, setAddingMember] = useState(false);
   const [addMemberError, setAddMemberError] = useState("");
   const [addMemberSuccess, setAddMemberSuccess] = useState("");
+  const [memberResetSent, setMemberResetSent] = useState<Record<string, boolean>>({});
 
   // Project form
   const [projForm, setProjForm] = useState({
@@ -302,6 +303,16 @@ export default function ClientDetailPage() {
       body: JSON.stringify({ membershipId, userId }),
     });
     fetchMembers();
+  }
+
+  async function handleMemberReset(userId: string, email: string) {
+    await fetch("/api/admin/resend-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    setMemberResetSent((prev) => ({ ...prev, [userId]: true }));
+    setTimeout(() => setMemberResetSent((prev) => ({ ...prev, [userId]: false })), 3000);
   }
 
   async function handleToggleRole(userId: string, currentRole: string) {
@@ -1278,6 +1289,15 @@ export default function ClientDetailPage() {
                         }`}
                       >
                         {m.profiles?.client_role === "ceo" ? "CEO" : "member"}
+                      </button>
+                      <button
+                        onClick={() => handleMemberReset(m.user_id, m.profiles?.email)}
+                        title="Send password reset email"
+                        className="w-6 h-6 flex items-center justify-center text-[var(--foreground-subtle)] hover:text-[var(--accent)] transition-colors cursor-pointer flex-shrink-0"
+                      >
+                        {memberResetSent[m.user_id]
+                          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          : <Mail className="w-3.5 h-3.5" />}
                       </button>
                       <button
                         onClick={() => handleRemoveMember(m.id, m.user_id)}
