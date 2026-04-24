@@ -21,6 +21,7 @@ export default function ContractsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [userId, setUserId] = useState("");
   const [viewing, setViewing] = useState<Contract | null>(null);
+  const [isMember, setIsMember] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -28,6 +29,13 @@ export default function ContractsPage() {
       if (!user) return;
       setUserId(user.id);
 
+      const { data: profile } = await supabase.from("profiles").select("client_role").eq("id", user.id).single();
+      if (profile?.client_role === "member") {
+        setIsMember(true);
+        return;
+      }
+
+      // Only project owners (CEO) can see contracts — RLS enforces this too
       const { data: projects } = await supabase.from("projects").select("id").eq("client_id", user.id).order("created_at", { ascending: true });
       const projectIds = (projects ?? []).map((p) => p.id);
       if (projectIds.length > 0) {
@@ -137,7 +145,15 @@ export default function ContractsPage() {
       <Topbar title="Contracts" subtitle="Review and sign your agreements" userId={userId} />
 
       <div className="flex-1 p-6 animate-fade-in">
-        {contracts.length === 0 ? (
+        {isMember ? (
+          <div className="text-center py-20">
+            <ScrollText className="w-10 h-10 text-[var(--foreground-subtle)] mx-auto mb-3" />
+            <p className="text-sm font-semibold text-[var(--foreground-muted)]">Access restricted</p>
+            <p className="text-xs text-[var(--foreground-subtle)] mt-1">
+              Only the primary account holder can view contracts.
+            </p>
+          </div>
+        ) : contracts.length === 0 ? (
           <div className="text-center py-20">
             <ScrollText className="w-10 h-10 text-[var(--foreground-subtle)] mx-auto mb-3" />
             <p className="text-sm text-[var(--foreground-muted)]">No contracts yet</p>

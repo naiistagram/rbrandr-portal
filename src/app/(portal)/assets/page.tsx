@@ -45,6 +45,7 @@ export default function AssetsPage() {
   const [uploadCategory, setUploadCategory] = useState<Asset["category"]>("brand");
   const [userId, setUserId] = useState("");
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectIds, setProjectIds] = useState<string[]>([]);
   const [viewing, setViewing] = useState<Asset | null>(null);
 
   useEffect(() => {
@@ -53,17 +54,19 @@ export default function AssetsPage() {
       if (!user) return;
       setUserId(user.id);
 
-      const { data: projects } = await supabase.from("projects").select("id").eq("client_id", user.id).order("created_at", { ascending: true });
-      const projectIds = (projects ?? []).map((p) => p.id);
-      if (projectIds.length > 0) setProjectId(projectIds[0]);
-      fetchAssets(user.id);
+      const { data: projects } = await supabase.from("projects").select("id").order("created_at", { ascending: true });
+      const ids = (projects ?? []).map((p) => p.id);
+      setProjectIds(ids);
+      if (ids.length > 0) setProjectId(ids[0]);
+      fetchAssets(ids);
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchAssets(clientId: string) {
-    const { data } = await supabase.from("assets").select("*").eq("client_id", clientId).order("created_at", { ascending: false });
+  async function fetchAssets(projectIds: string[]) {
+    if (projectIds.length === 0) return;
+    const { data } = await supabase.from("assets").select("*").in("project_id", projectIds).order("created_at", { ascending: false });
     if (data) setAssets(data);
   }
 
@@ -98,7 +101,7 @@ export default function AssetsPage() {
         });
       }
 
-      if (userId) await fetchAssets(userId);
+      await fetchAssets(projectIds);
       setUploading(false);
     },
     [projectId, userId, supabase]

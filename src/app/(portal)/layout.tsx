@@ -56,6 +56,21 @@ export default async function PortalLayout({
   // Admins use the admin panel
   if (profile.role === "admin") redirect("/admin/dashboard");
 
+  // Members don't have service_type on their own profile — inherit from their project
+  let serviceType: string | null = profile.service_type ?? null;
+  const clientRole: "ceo" | "member" = (profile.client_role as "ceo" | "member") ?? "ceo";
+
+  if (clientRole === "member") {
+    const { data: membership } = await admin
+      .from("project_members")
+      .select("project_id, projects(service_type)")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single();
+    const proj = (membership?.projects as unknown) as { service_type: string } | null;
+    if (proj?.service_type) serviceType = proj.service_type;
+  }
+
   return (
     <div className="flex h-full min-h-screen">
       <Sidebar
@@ -66,7 +81,8 @@ export default async function PortalLayout({
           avatar_url: profile.avatar_url,
           company_name: profile.company_name,
         }}
-        serviceType={profile.service_type ?? null}
+        serviceType={serviceType}
+        clientRole={clientRole}
       />
       <main className="flex-1 ml-60 flex flex-col min-h-screen">
         {children}

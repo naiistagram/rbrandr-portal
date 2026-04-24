@@ -92,10 +92,11 @@ interface SidebarProps {
     company_name: string | null;
   };
   serviceType?: string | null;
+  clientRole?: "ceo" | "member";
   notificationCount?: number;
 }
 
-export function Sidebar({ user, serviceType, notificationCount = 0 }: SidebarProps) {
+export function Sidebar({ user, serviceType, clientRole = "ceo", notificationCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -108,7 +109,11 @@ export function Sidebar({ user, serviceType, notificationCount = 0 }: SidebarPro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
-  const navItems = getNav(serviceType);
+  const navItems = getNav(serviceType).filter(
+    (item) => clientRole === "ceo" || item.href !== "/contracts"
+  );
+
+  void notificationCount;
 
   async function handleSignOut() {
     await supabase.auth.signOut();

@@ -18,8 +18,12 @@ export default function TimelinePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
-      const { data } = await supabase.from("milestones").select("*").eq("client_id", user.id).order("due_date", { ascending: true });
-      if (data) setMilestones(data);
+      const { data: projects } = await supabase.from("projects").select("id");
+      const projectIds = (projects ?? []).map((p) => p.id);
+      if (projectIds.length > 0) {
+        const { data } = await supabase.from("milestones").select("*").in("project_id", projectIds).order("due_date", { ascending: true });
+        if (data) setMilestones(data);
+      }
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps

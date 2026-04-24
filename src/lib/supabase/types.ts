@@ -7,10 +7,19 @@ export interface Profile {
   full_name: string;
   avatar_url: string | null;
   role: "admin" | "client";
+  client_role: "ceo" | "member";
   company_name: string | null;
   service_type: "website" | "marketing" | "both" | "social_media" | "brand";
   created_at: string;
   updated_at: string;
+}
+
+export interface ProjectMember {
+  id: string;
+  project_id: string;
+  user_id: string;
+  created_at: string;
+  profile?: Pick<Profile, "id" | "email" | "full_name" | "avatar_url" | "client_role">;
 }
 
 export interface Project {

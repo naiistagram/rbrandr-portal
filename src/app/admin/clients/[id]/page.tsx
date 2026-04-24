@@ -121,6 +121,14 @@ export default function ClientDetailPage() {
   const [replySaved, setReplySaved] = useState<Record<string, boolean>>({});
   const [viewingAdminAsset, setViewingAdminAsset] = useState<Asset | null>(null);
   const [ticketMessages, setTicketMessages] = useState<Record<string, string>>({});
+  // Team members
+  type MemberRow = { id: string; user_id: string; created_at: string; profiles: { id: string; full_name: string; email: string; avatar_url: string | null; client_role: string } };
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [memberForm, setMemberForm] = useState({ fullName: "", email: "" });
+  const [addingMember, setAddingMember] = useState(false);
+  const [addMemberError, setAddMemberError] = useState("");
+  const [addMemberSuccess, setAddMemberSuccess] = useState("");
 
   // Project form
   const [projForm, setProjForm] = useState({
@@ -256,7 +264,44 @@ export default function ClientDetailPage() {
     setFeedbackReplies(initialReplies);
     const { data: templates } = await supabase.from("form_templates").select("*").order("created_at", { ascending: false });
     if (templates) setFormTemplates(templates as typeof formTemplates);
+    fetchMembers();
     setLoading(false);
+  }
+
+  async function fetchMembers() {
+    const res = await fetch(`/api/admin/clients/${clientId}/members`);
+    if (res.ok) {
+      const data = await res.json();
+      setMembers(data.members ?? []);
+    }
+  }
+
+  async function handleAddMember(e: React.FormEvent) {
+    e.preventDefault();
+    setAddingMember(true);
+    setAddMemberError("");
+    setAddMemberSuccess("");
+    const res = await fetch(`/api/admin/clients/${clientId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(memberForm),
+    });
+    const data = await res.json();
+    setAddingMember(false);
+    if (!res.ok) { setAddMemberError(data.error ?? "Failed to add member."); return; }
+    setAddMemberSuccess(`Invitation sent to ${memberForm.email}`);
+    setMemberForm({ fullName: "", email: "" });
+    fetchMembers();
+  }
+
+  async function handleRemoveMember(membershipId: string, userId: string) {
+    if (!confirm("Remove this team member? Their account will be deleted.")) return;
+    await fetch(`/api/admin/clients/${clientId}/members`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ membershipId, userId }),
+    });
+    fetchMembers();
   }
 
   async function handleSaveServiceType(value: Profile["service_type"]) {
@@ -1182,6 +1227,85 @@ export default function ClientDetailPage() {
                 </div>
               </div>
             )}
+            {/* Team Members */}
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[var(--accent)]" />
+                  <h3 className="text-sm font-semibold text-[var(--foreground)]">Team Members</h3>
+                  <span className="text-xs text-[var(--foreground-subtle)]">({members.length})</span>
+                </div>
+                <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => { setShowAddMember(true); setAddMemberError(""); setAddMemberSuccess(""); }}>
+                  <Plus className="w-3.5 h-3.5" /> Add Member
+                </Button>
+              </div>
+
+              {members.length === 0 ? (
+                <p className="text-xs text-[var(--foreground-subtle)]">No additional team members yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {members.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 py-2 border-b border-[var(--border)] last:border-0">
+                      <div className="w-7 h-7 rounded-full bg-[var(--accent-subtle)] flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-[var(--accent)]">
+                        {m.profiles?.full_name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[var(--foreground)] truncate">{m.profiles?.full_name}</p>
+                        <p className="text-xs text-[var(--foreground-subtle)] truncate">{m.profiles?.email}</p>
+                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-500/10 text-zinc-400 flex-shrink-0">
+                        member
+                      </span>
+                      <button
+                        onClick={() => handleRemoveMember(m.id, m.user_id)}
+                        className="w-6 h-6 flex items-center justify-center text-[var(--foreground-subtle)] hover:text-red-400 transition-colors cursor-pointer flex-shrink-0"
+                        title="Remove member"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showAddMember && (
+                <form onSubmit={handleAddMember} className="pt-3 border-t border-[var(--border)] space-y-3">
+                  {addMemberSuccess ? (
+                    <div className="flex items-center gap-2 text-sm text-emerald-400">
+                      <Mail className="w-4 h-4" /> {addMemberSuccess}
+                      <button type="button" onClick={() => setShowAddMember(false)} className="ml-auto text-[var(--foreground-subtle)] hover:text-[var(--foreground)] cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          required
+                          type="text"
+                          placeholder="Full name"
+                          value={memberForm.fullName}
+                          onChange={(e) => setMemberForm((f) => ({ ...f, fullName: e.target.value }))}
+                          className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
+                        />
+                        <input
+                          required
+                          type="email"
+                          placeholder="Email address"
+                          value={memberForm.email}
+                          onChange={(e) => setMemberForm((f) => ({ ...f, email: e.target.value }))}
+                          className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
+                        />
+                      </div>
+                      {addMemberError && <p className="text-xs text-red-400">{addMemberError}</p>}
+                      <div className="flex gap-2">
+                        <Button type="button" variant="secondary" size="sm" onClick={() => setShowAddMember(false)}>Cancel</Button>
+                        <Button type="submit" size="sm" loading={addingMember} className="gap-1.5"><Mail className="w-3.5 h-3.5" /> Send Invite</Button>
+                      </div>
+                    </>
+                  )}
+                </form>
+              )}
+            </div>
+
           </div>
         )}
 
