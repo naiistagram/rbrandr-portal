@@ -83,15 +83,20 @@ export default async function CompanyPage({
 
   const tab: Tab = (TABS as readonly string[]).includes(tabParam ?? "") ? (tabParam as Tab) : "Overview";
 
-  // All clients at this company
-  const { data: clients } = await admin
+  // Fetch all clients and filter by normalized company name to handle
+  // case/whitespace inconsistencies stored in DB (e.g. "ACME " vs "acme")
+  const normalizedTarget = companyName.toLowerCase().trim();
+  const { data: allClientProfiles } = await admin
     .from("profiles")
     .select("id, full_name, email, avatar_url, client_role, job_title, created_at, service_type, company_name")
-    .ilike("company_name", companyName)
     .eq("role", "client")
     .order("created_at", { ascending: true });
 
-  if (!clients || clients.length === 0) redirect("/admin/clients");
+  const clients = (allClientProfiles ?? []).filter(
+    (c) => c.company_name?.toLowerCase().trim() === normalizedTarget
+  );
+
+  if (clients.length === 0) redirect("/admin/clients");
 
   const clientIds = clients.map((c) => c.id);
   const clientMap = Object.fromEntries(clients.map((c) => [c.id, c]));
