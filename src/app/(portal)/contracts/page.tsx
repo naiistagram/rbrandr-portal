@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ScrollText, Download, PenLine, CheckCircle2, Clock, X } from "lucide-react";
+import { ScrollText, Download, PenLine, CheckCircle2, Clock, X, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,7 @@ export default function ContractsPage() {
   const [signerName, setSignerName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [userId, setUserId] = useState("");
+  const [viewing, setViewing] = useState<Contract | null>(null);
 
   useEffect(() => {
     async function init() {
@@ -175,11 +176,19 @@ export default function ContractsPage() {
                       <Icon className="w-3 h-3" />
                       {s?.label}
                     </Badge>
+                    <button
+                      onClick={() => setViewing(contract)}
+                      className="w-8 h-8 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:border-zinc-500 transition-all cursor-pointer"
+                      title="View document"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
                     <a
                       href={contract.file_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-8 h-8 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:border-zinc-500 transition-all"
+                      title="Download"
                     >
                       <Download className="w-3.5 h-3.5" />
                     </a>
@@ -200,6 +209,44 @@ export default function ContractsPage() {
           </div>
         )}
       </div>
+
+      {/* PDF viewer modal */}
+      {viewing && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col animate-fade-in">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)] flex-shrink-0">
+              <div>
+                <h3 className="text-sm font-bold text-[var(--foreground)]">{viewing.title}</h3>
+                <p className="text-xs text-[var(--foreground-muted)] mt-0.5">Read-only preview</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={viewing.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-xs text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-all"
+                >
+                  <Download className="w-3 h-3" />
+                  Download
+                </a>
+                <button
+                  onClick={() => setViewing(null)}
+                  className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden rounded-b-2xl">
+              <iframe
+                src={`${viewing.file_url}#toolbar=0`}
+                className="w-full h-full"
+                title={viewing.title}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Signature modal */}
       {signing && (
