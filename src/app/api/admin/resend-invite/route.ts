@@ -50,12 +50,12 @@ export async function POST(request: NextRequest) {
 
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { error: emailError } = await resend.emails.send({
-      from: "rbrandr Portal <notifications@rbrandr.com>",
+      from: "RBRANDR Portal <notifications@rbrandr.com>",
       to: email,
-      subject: "You've been invited to the rbrandr Portal",
+      subject: "You've been invited to the RBRANDR Portal",
       html: `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>rbrandr Portal</title></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RBRANDR Portal</title></head>
 <body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#09090b;padding:48px 16px;">
     <tr><td align="center">
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
             You're invited 🎉
           </h1>
           <p style="margin:0 0 28px;font-size:14px;color:#a1a1aa;line-height:1.6;">
-            Your account has been set up on the <strong style="color:#fafafa;">rbrandr Client Portal</strong>. Click below to set your password and get started.
+            Your account has been set up on the <strong style="color:#fafafa;">RBRANDR Client Portal</strong>. Click below to set your password and get started.
           </p>
 
           <table cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         </td></tr>
 
         <tr><td style="padding-top:24px;" align="center">
-          <p style="margin:0;font-size:11px;color:#3f3f46;">© rbrandr · Sent by rbrandr Portal</p>
+          <p style="margin:0;font-size:11px;color:#3f3f46;">© RBRANDR · Sent by RBRANDR Portal</p>
         </td></tr>
 
       </table>

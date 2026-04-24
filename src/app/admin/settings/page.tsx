@@ -170,7 +170,7 @@ export default function SettingsPage() {
                   className={`${inputClass} opacity-50 cursor-not-allowed`}
                 />
                 <p className="text-xs text-[var(--foreground-subtle)]">
-                  Contact rbrandr to change your email
+                  Contact RBRANDR to change your email
                 </p>
               </div>
 

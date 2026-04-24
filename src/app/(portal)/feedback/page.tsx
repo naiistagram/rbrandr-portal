@@ -170,7 +170,7 @@ export default function FeedbackPage() {
                 <p className="text-sm text-[var(--foreground-muted)] leading-relaxed">{fb.message}</p>
                 {fb.admin_reply && (
                   <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-[var(--accent)]/20">
-                    <p className="text-[10px] font-semibold text-[var(--accent)] uppercase tracking-wider mb-1">Reply from rbrandr</p>
+                    <p className="text-[10px] font-semibold text-[var(--accent)] uppercase tracking-wider mb-1">Reply from RBRANDR</p>
                     <p className="text-sm text-[var(--foreground-muted)] leading-relaxed">{fb.admin_reply}</p>
                   </div>
                 )}

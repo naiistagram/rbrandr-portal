@@ -142,7 +142,7 @@ export default function ContractsPage() {
             <ScrollText className="w-10 h-10 text-[var(--foreground-subtle)] mx-auto mb-3" />
             <p className="text-sm text-[var(--foreground-muted)]">No contracts yet</p>
             <p className="text-xs text-[var(--foreground-subtle)] mt-1">
-              Contracts from rbrandr will appear here
+              Contracts from RBRANDR will appear here
             </p>
           </div>
         ) : (

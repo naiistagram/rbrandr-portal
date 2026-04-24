@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   }
 
   const { data, error } = await resend.emails.send({
-    from: "rbrandr Portal <notifications@rbrandr.com>",
+    from: "RBRANDR Portal <notifications@rbrandr.com>",
     to,
     subject,
     html,

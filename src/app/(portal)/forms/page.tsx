@@ -85,7 +85,7 @@ export default function FormsPage() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Topbar title="Forms & Templates" subtitle="Complete forms and questionnaires from rbrandr" userId={userId} />
+      <Topbar title="Forms & Templates" subtitle="Complete forms and questionnaires from RBRANDR" userId={userId} />
 
       <div className="flex-1 p-6 animate-fade-in">
         {forms.length === 0 ? (
@@ -93,7 +93,7 @@ export default function FormsPage() {
             <FileText className="w-10 h-10 text-[var(--foreground-subtle)] mx-auto mb-3" />
             <p className="text-sm text-[var(--foreground-muted)]">No forms yet</p>
             <p className="text-xs text-[var(--foreground-subtle)] mt-1">
-              Forms and questionnaires from rbrandr will appear here
+              Forms and questionnaires from RBRANDR will appear here
             </p>
           </div>
         ) : (
