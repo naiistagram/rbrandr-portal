@@ -4,55 +4,56 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Resend } from "resend";
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const admin = createAdminClient();
+    const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
+    if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { email } = await request.json();
-  if (!email) return NextResponse.json({ error: "Email required." }, { status: 400 });
+    const { email } = await request.json();
+    if (!email) return NextResponse.json({ error: "Email required." }, { status: 400 });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const redirectTo = `${appUrl}/auth/callback?next=/reset-password`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const redirectTo = `${appUrl}/auth/callback?next=/reset-password`;
 
-  // Try invite type first (new users / unconfirmed users)
-  // Fall back to recovery type for already-confirmed users
-  let hashedToken: string;
-  let linkType: "invite" | "recovery";
+    let hashedToken: string;
+    let linkType: "invite" | "recovery";
 
-  const { data: inviteData, error: inviteError } = await admin.auth.admin.generateLink({
-    type: "invite",
-    email,
-    options: { redirectTo },
-  });
-
-  if (!inviteError && inviteData) {
-    hashedToken = inviteData.properties.hashed_token;
-    linkType = "invite";
-  } else {
-    const { data: recoveryData, error: recoveryError } = await admin.auth.admin.generateLink({
-      type: "recovery",
+    const { data: inviteData, error: inviteError } = await admin.auth.admin.generateLink({
+      type: "invite",
       email,
       options: { redirectTo },
     });
-    if (recoveryError || !recoveryData) {
-      return NextResponse.json({ error: "Failed to generate reset link" }, { status: 400 });
+
+    if (!inviteError && inviteData) {
+      hashedToken = inviteData.properties.hashed_token;
+      linkType = "invite";
+    } else {
+      console.error("[resend-invite] invite generateLink error:", inviteError?.message);
+      const { data: recoveryData, error: recoveryError } = await admin.auth.admin.generateLink({
+        type: "recovery",
+        email,
+        options: { redirectTo },
+      });
+      if (recoveryError || !recoveryData) {
+        console.error("[resend-invite] recovery generateLink error:", recoveryError?.message);
+        return NextResponse.json({ error: "Failed to generate reset link" }, { status: 400 });
+      }
+      hashedToken = recoveryData.properties.hashed_token;
+      linkType = "recovery";
     }
-    hashedToken = recoveryData.properties.hashed_token;
-    linkType = "recovery";
-  }
 
-  const resetUrl = `${appUrl}/auth/callback?token_hash=${hashedToken}&type=${linkType}&next=/reset-password`;
+    const resetUrl = `${appUrl}/auth/callback?token_hash=${hashedToken}&type=${linkType}&next=/reset-password`;
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const { error: emailError } = await resend.emails.send({
-    from: "rbrandr Portal <notifications@rbrandr.com>",
-    to: email,
-    subject: "You've been invited to the rbrandr Portal",
-    html: `<!DOCTYPE html>
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { error: emailError } = await resend.emails.send({
+      from: "rbrandr Portal <notifications@rbrandr.com>",
+      to: email,
+      subject: "You've been invited to the rbrandr Portal",
+      html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>rbrandr Portal</title></head>
 <body style="margin:0;padding:0;background:#09090b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
@@ -96,9 +97,16 @@ export async function POST(request: NextRequest) {
   </table>
 </body>
 </html>`,
-  });
+    });
 
-  if (emailError) return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+    if (emailError) {
+      console.error("[resend-invite] Resend error:", emailError);
+      return NextResponse.json({ error: "Failed to send email" }, { status: 500 });
+    }
 
-  return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[resend-invite] Unhandled error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
