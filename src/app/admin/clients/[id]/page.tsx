@@ -87,6 +87,9 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<Profile | null>(null);
   const [clientServiceType, setClientServiceType] = useState<Profile["service_type"]>("social_media");
   const [savingServiceType, setSavingServiceType] = useState(false);
+  const [clientRoleState, setClientRoleState] = useState<"ceo" | "member">("ceo");
+  const [jobTitleState, setJobTitleState] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [content, setContent] = useState<ContentItem[]>([]);
@@ -228,6 +231,8 @@ export default function ClientDetailPage() {
     const data = await res.json();
     setClient(data.client);
     setClientServiceType(data.client?.service_type ?? "social_media");
+    setClientRoleState(data.client?.client_role ?? "ceo");
+    setJobTitleState(data.client?.job_title ?? "");
     setAllProjects(data.projects ?? []);
     if (data.project) {
       setProject(data.project);
@@ -336,6 +341,16 @@ export default function ClientDetailPage() {
       body: JSON.stringify({ service_type: value }),
     });
     setSavingServiceType(false);
+  }
+
+  async function handleSaveClientProfile(fields: { client_role?: string; job_title?: string }) {
+    setSavingProfile(true);
+    await fetch(`/api/admin/clients/${clientId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    setSavingProfile(false);
   }
 
   async function handleResendInvite() {
@@ -958,6 +973,35 @@ export default function ClientDetailPage() {
                 <p className="text-xs text-[var(--foreground-subtle)] mb-1">Service</p>
                 <p className="text-sm text-[var(--foreground)]">{SERVICE_TYPES.find((t) => t.value === projForm.service_type)?.label ?? "—"}</p>
               </div>
+              <div>
+                <p className="text-xs text-[var(--foreground-subtle)] mb-1">Portal Role</p>
+                <select
+                  value={clientRoleState}
+                  onChange={(e) => {
+                    const val = e.target.value as "ceo" | "member";
+                    setClientRoleState(val);
+                    handleSaveClientProfile({ client_role: val });
+                  }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all cursor-pointer w-full"
+                >
+                  <option value="ceo">CEO — full access</option>
+                  <option value="member">Member — no contracts</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--foreground-subtle)] mb-1">Job Title</p>
+                <input
+                  type="text"
+                  value={jobTitleState}
+                  onChange={(e) => setJobTitleState(e.target.value)}
+                  onBlur={() => handleSaveClientProfile({ job_title: jobTitleState })}
+                  placeholder="e.g. Marketing Manager"
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all w-full placeholder:text-[var(--foreground-subtle)]"
+                />
+              </div>
+              {savingProfile && (
+                <p className="col-span-2 text-xs text-[var(--foreground-subtle)]">Saving…</p>
+              )}
               <div className="col-span-2 pt-1 border-t border-[var(--border)]">
                 <Button variant="secondary" size="sm" loading={resending} onClick={handleResendInvite} className="gap-2 w-full">
                   <Mail className="w-3.5 h-3.5" />

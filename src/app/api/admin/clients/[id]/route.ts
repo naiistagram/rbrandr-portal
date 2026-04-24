@@ -83,10 +83,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
-  const { service_type } = body;
-  if (!service_type) return NextResponse.json({ error: "service_type required" }, { status: 400 });
+  const { service_type, client_role, job_title } = body;
 
-  const { error } = await auth.admin.from("profiles").update({ service_type }).eq("id", clientId);
+  const updates: Record<string, unknown> = {};
+  if (service_type !== undefined) updates.service_type = service_type;
+  if (client_role !== undefined) updates.client_role = client_role;
+  if (job_title !== undefined) updates.job_title = job_title?.trim() || null;
+
+  if (Object.keys(updates).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  const { error } = await auth.admin.from("profiles").update(updates).eq("id", clientId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
