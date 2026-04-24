@@ -32,7 +32,7 @@ export default function FeedbackPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
-      const { data: projects } = await supabase.from("projects").select("id").eq("client_id", user.id).order("created_at", { ascending: true });
+      const { data: projects } = await supabase.from("projects").select("id").order("created_at", { ascending: true });
       const projectIds = (projects ?? []).map((p) => p.id);
       if (projectIds.length > 0) setProjectId(projectIds[0]);
       const { data } = await supabase.from("feedback").select("*").eq("submitted_by", user.id).order("created_at", { ascending: false });

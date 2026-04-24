@@ -77,7 +77,7 @@ export default function ResetPasswordPage() {
     return (
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-7 text-center space-y-3 animate-fade-in">
         <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-sm text-[var(--foreground-muted)]">Verifying your reset link…</p>
+        <p className="text-sm text-[var(--foreground-muted)]">Verifying your link…</p>
         <p className="text-xs text-[var(--foreground-subtle)]">
           If nothing happens,{" "}
           <a href="/forgot-password" className="text-[var(--accent)] hover:underline">

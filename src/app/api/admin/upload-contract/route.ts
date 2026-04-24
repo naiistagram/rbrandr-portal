@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getProjectMemberEmails, buildEmailHtml, sendPortalEmail } from "@/lib/email";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -50,6 +51,21 @@ export async function POST(request: NextRequest) {
       link: "/contracts",
     });
   }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const isTerms = type === "terms";
+  const emailSubject = isTerms ? `New T&Cs to review — ${title}` : `New contract ready for your signature — ${title}`;
+  const emailTitle = isTerms ? "New Terms & Conditions to review" : "New contract to sign";
+  const emailBody = isTerms
+    ? `Your updated Terms &amp; Conditions document <strong style="color:#fafafa;">"${title}"</strong> has been uploaded and is ready for your review.`
+    : `A new contract <strong style="color:#fafafa;">"${title}"</strong> has been uploaded and requires your signature.`;
+
+  const ceEmails = await getProjectMemberEmails(projectId, true);
+  await sendPortalEmail({
+    to: ceEmails,
+    subject: emailSubject,
+    html: buildEmailHtml({ title: emailTitle, body: emailBody, ctaText: "View contract", ctaUrl: `${appUrl}/contracts` }),
+  });
 
   return NextResponse.json({ contract: data });
 }

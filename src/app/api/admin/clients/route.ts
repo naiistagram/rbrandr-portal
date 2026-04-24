@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { fullName, email, companyName, serviceType, projectName } = await request.json();
-  if (!fullName || !email) return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
+  if (!fullName || !email || !companyName) return NextResponse.json({ error: "Name, email, and company are required." }, { status: 400 });
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
   const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       full_name: fullName,
       company_name: companyName || null,
     },
-    redirectTo: `${appUrl}/auth/callback`,
+    redirectTo: `${appUrl}/reset-password`,
   });
 
   if (inviteError || !inviteData.user) {

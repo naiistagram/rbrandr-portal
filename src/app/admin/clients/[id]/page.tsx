@@ -87,6 +87,10 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<Profile | null>(null);
   const [clientServiceType, setClientServiceType] = useState<Profile["service_type"]>("social_media");
   const [savingServiceType, setSavingServiceType] = useState(false);
+  const [clientRoleState, setClientRoleState] = useState<"ceo" | "member">("ceo");
+  const [jobTitleState, setJobTitleState] = useState("");
+  const [companyNameState, setCompanyNameState] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [content, setContent] = useState<ContentItem[]>([]);
@@ -121,6 +125,15 @@ export default function ClientDetailPage() {
   const [replySaved, setReplySaved] = useState<Record<string, boolean>>({});
   const [viewingAdminAsset, setViewingAdminAsset] = useState<Asset | null>(null);
   const [ticketMessages, setTicketMessages] = useState<Record<string, string>>({});
+  // Team members
+  type MemberRow = { id: string; user_id: string; created_at: string; profiles: { id: string; full_name: string; email: string; avatar_url: string | null; client_role: string } };
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [memberForm, setMemberForm] = useState({ fullName: "", email: "", jobTitle: "" });
+  const [addingMember, setAddingMember] = useState(false);
+  const [addMemberError, setAddMemberError] = useState("");
+  const [addMemberSuccess, setAddMemberSuccess] = useState("");
+  const [memberResetSent, setMemberResetSent] = useState<Record<string, boolean>>({});
 
   // Project form
   const [projForm, setProjForm] = useState({
@@ -219,6 +232,9 @@ export default function ClientDetailPage() {
     const data = await res.json();
     setClient(data.client);
     setClientServiceType(data.client?.service_type ?? "social_media");
+    setClientRoleState(data.client?.client_role ?? "ceo");
+    setJobTitleState(data.client?.job_title ?? "");
+    setCompanyNameState(data.client?.company_name ?? "");
     setAllProjects(data.projects ?? []);
     if (data.project) {
       setProject(data.project);
@@ -256,7 +272,64 @@ export default function ClientDetailPage() {
     setFeedbackReplies(initialReplies);
     const { data: templates } = await supabase.from("form_templates").select("*").order("created_at", { ascending: false });
     if (templates) setFormTemplates(templates as typeof formTemplates);
+    fetchMembers();
     setLoading(false);
+  }
+
+  async function fetchMembers() {
+    const res = await fetch(`/api/admin/clients/${clientId}/members`);
+    if (res.ok) {
+      const data = await res.json();
+      setMembers(data.members ?? []);
+    }
+  }
+
+  async function handleAddMember(e: React.FormEvent) {
+    e.preventDefault();
+    setAddingMember(true);
+    setAddMemberError("");
+    setAddMemberSuccess("");
+    const res = await fetch(`/api/admin/clients/${clientId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(memberForm),
+    });
+    const data = await res.json();
+    setAddingMember(false);
+    if (!res.ok) { setAddMemberError(data.error ?? "Failed to add member."); return; }
+    setAddMemberSuccess(`Invitation sent to ${memberForm.email}`);
+    setMemberForm({ fullName: "", email: "", jobTitle: "" });
+    fetchMembers();
+  }
+
+  async function handleRemoveMember(membershipId: string, userId: string) {
+    if (!confirm("Remove this team member? Their account will be deleted.")) return;
+    await fetch(`/api/admin/clients/${clientId}/members`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ membershipId, userId }),
+    });
+    fetchMembers();
+  }
+
+  async function handleMemberReset(userId: string, email: string) {
+    await fetch("/api/admin/resend-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    setMemberResetSent((prev) => ({ ...prev, [userId]: true }));
+    setTimeout(() => setMemberResetSent((prev) => ({ ...prev, [userId]: false })), 3000);
+  }
+
+  async function handleToggleRole(userId: string, currentRole: string) {
+    const newRole = currentRole === "ceo" ? "member" : "ceo";
+    await fetch(`/api/admin/clients/${clientId}/members`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, clientRole: newRole }),
+    });
+    fetchMembers();
   }
 
   async function handleSaveServiceType(value: Profile["service_type"]) {
@@ -270,6 +343,16 @@ export default function ClientDetailPage() {
       body: JSON.stringify({ service_type: value }),
     });
     setSavingServiceType(false);
+  }
+
+  async function handleSaveClientProfile(fields: { client_role?: string; job_title?: string; company_name?: string }) {
+    setSavingProfile(true);
+    await fetch(`/api/admin/clients/${clientId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    setSavingProfile(false);
   }
 
   async function handleResendInvite() {
@@ -454,22 +537,30 @@ export default function ClientDetailPage() {
     e.preventDefault();
     if (!project || !msForm.title || !msForm.due_date) return;
     setAddingMs(true);
-    const { data } = await supabase.from("milestones").insert({
-      project_id: project.id,
-      client_id: clientId,
-      title: msForm.title,
-      description: msForm.description || null,
-      due_date: msForm.due_date,
-      completed: false,
-    }).select().single();
-    if (data) setMilestones((prev) => [...prev, data].sort((a, b) => a.due_date.localeCompare(b.due_date)));
+    const res = await fetch("/api/admin/milestones", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: project.id,
+        client_id: clientId,
+        title: msForm.title,
+        description: msForm.description || null,
+        due_date: msForm.due_date,
+      }),
+    });
+    const json = await res.json();
+    if (json.milestone) setMilestones((prev) => [...prev, json.milestone].sort((a, b) => a.due_date.localeCompare(b.due_date)));
     setMsForm({ title: "", description: "", due_date: "" });
     setShowMilestoneForm(false);
     setAddingMs(false);
   }
 
   async function toggleMilestone(id: string, completed: boolean) {
-    await supabase.from("milestones").update({ completed }).eq("id", id);
+    await fetch("/api/admin/milestones", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, completed }),
+    });
     setMilestones((prev) => prev.map((m) => m.id === id ? { ...m, completed } : m));
   }
 
@@ -484,15 +575,19 @@ export default function ClientDetailPage() {
       required: f.required ?? false,
       options: (f.type === "select" || f.type === "multiselect" || f.type === "checkbox") && f.options ? f.options.split(",").map((o) => o.trim()).filter(Boolean) : undefined,
     }));
-    const { data } = await supabase.from("forms").insert({
-      project_id: project.id,
-      client_id: clientId,
-      title: fbTitle,
-      description: fbDescription || null,
-      fields,
-      status: "pending",
-    }).select().single();
-    if (data) setForms((prev) => [data, ...prev]);
+    const res = await fetch("/api/admin/forms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: project.id,
+        client_id: clientId,
+        title: fbTitle,
+        description: fbDescription || null,
+        fields,
+      }),
+    });
+    const json = await res.json();
+    if (json.form) setForms((prev) => [json.form, ...prev]);
     setFbTitle("");
     setFbDescription("");
     setFbFields([]);
@@ -703,16 +798,14 @@ export default function ClientDetailPage() {
   }
 
   async function handleUpdateContentStatus(itemId: string, newStatus: ContentItem["status"]) {
-    await supabase.from("content_items").update({ status: newStatus }).eq("id", itemId);
-    await supabase.from("notifications").insert({
-      user_id: clientId,
-      title: "Content Status Updated",
-      message: `Your content has been moved to ${STATUS_CONFIG[newStatus]?.label ?? newStatus}`,
-      type: "content",
-      read: false,
-      link: "/calendar",
+    const res = await fetch("/api/admin/content-status", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, status: newStatus, clientId }),
     });
-    setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, status: newStatus } : c));
+    if (res.ok) {
+      setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, status: newStatus } : c));
+    }
   }
 
   async function handleUpdateContentDate(itemId: string, newDate: string) {
@@ -882,7 +975,14 @@ export default function ClientDetailPage() {
               </div>
               <div>
                 <p className="text-xs text-[var(--foreground-subtle)] mb-1">Company</p>
-                <p className="text-sm text-[var(--foreground)]">{client.company_name ?? "—"}</p>
+                <input
+                  type="text"
+                  value={companyNameState}
+                  onChange={(e) => setCompanyNameState(e.target.value)}
+                  onBlur={() => handleSaveClientProfile({ company_name: companyNameState })}
+                  placeholder="e.g. Acme Ltd."
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all w-full placeholder:text-[var(--foreground-subtle)]"
+                />
               </div>
               <div>
                 <p className="text-xs text-[var(--foreground-subtle)] mb-1">Joined</p>
@@ -892,6 +992,35 @@ export default function ClientDetailPage() {
                 <p className="text-xs text-[var(--foreground-subtle)] mb-1">Service</p>
                 <p className="text-sm text-[var(--foreground)]">{SERVICE_TYPES.find((t) => t.value === projForm.service_type)?.label ?? "—"}</p>
               </div>
+              <div>
+                <p className="text-xs text-[var(--foreground-subtle)] mb-1">Portal Role</p>
+                <select
+                  value={clientRoleState}
+                  onChange={(e) => {
+                    const val = e.target.value as "ceo" | "member";
+                    setClientRoleState(val);
+                    handleSaveClientProfile({ client_role: val });
+                  }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all cursor-pointer w-full"
+                >
+                  <option value="ceo">CEO — full access</option>
+                  <option value="member">Member — no contracts</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--foreground-subtle)] mb-1">Job Title</p>
+                <input
+                  type="text"
+                  value={jobTitleState}
+                  onChange={(e) => setJobTitleState(e.target.value)}
+                  onBlur={() => handleSaveClientProfile({ job_title: jobTitleState })}
+                  placeholder="e.g. Marketing Manager"
+                  className="text-xs px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all w-full placeholder:text-[var(--foreground-subtle)]"
+                />
+              </div>
+              {savingProfile && (
+                <p className="col-span-2 text-xs text-[var(--foreground-subtle)]">Saving…</p>
+              )}
               <div className="col-span-2 pt-1 border-t border-[var(--border)]">
                 <Button variant="secondary" size="sm" loading={resending} onClick={handleResendInvite} className="gap-2 w-full">
                   <Mail className="w-3.5 h-3.5" />
@@ -1182,6 +1311,118 @@ export default function ClientDetailPage() {
                 </div>
               </div>
             )}
+            {/* Team Members */}
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[var(--accent)]" />
+                  <h3 className="text-sm font-semibold text-[var(--foreground)]">Team Members</h3>
+                  <span className="text-xs text-[var(--foreground-subtle)]">({members.length})</span>
+                </div>
+                <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => { setShowAddMember(true); setAddMemberError(""); setAddMemberSuccess(""); }}>
+                  <Plus className="w-3.5 h-3.5" /> Add Member
+                </Button>
+              </div>
+
+              {members.length === 0 ? (
+                <p className="text-xs text-[var(--foreground-subtle)]">No additional team members yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {members.map((m) => (
+                    <div key={m.id} className="flex items-center gap-3 py-2 border-b border-[var(--border)] last:border-0">
+                      <div className="w-7 h-7 rounded-full bg-[var(--accent-subtle)] flex items-center justify-center flex-shrink-0 text-[10px] font-bold text-[var(--accent)]">
+                        {m.profiles?.full_name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[var(--foreground)] truncate">{m.profiles?.full_name}</p>
+                        <p className="text-xs text-[var(--foreground-subtle)] truncate">{m.profiles?.email}</p>
+                      </div>
+                      {(() => {
+                        const jt = (m.profiles as { job_title?: string })?.job_title;
+                        const roleLabel = m.profiles?.client_role === "ceo" ? "ceo" : "member";
+                        return jt && jt.toLowerCase() !== roleLabel ? (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20 flex-shrink-0 max-w-[120px] truncate">
+                            {jt}
+                          </span>
+                        ) : null;
+                      })()}
+                      <button
+                        onClick={() => handleToggleRole(m.user_id, m.profiles?.client_role ?? "member")}
+                        title="Click to toggle role"
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 cursor-pointer transition-all ${
+                          m.profiles?.client_role === "ceo"
+                            ? "bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20"
+                            : "bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20"
+                        }`}
+                      >
+                        {m.profiles?.client_role === "ceo" ? "CEO" : "member"}
+                      </button>
+                      <button
+                        onClick={() => handleMemberReset(m.user_id, m.profiles?.email)}
+                        title="Send password reset email"
+                        className="w-6 h-6 flex items-center justify-center text-[var(--foreground-subtle)] hover:text-[var(--accent)] transition-colors cursor-pointer flex-shrink-0"
+                      >
+                        {memberResetSent[m.user_id]
+                          ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          : <Mail className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        onClick={() => handleRemoveMember(m.id, m.user_id)}
+                        className="w-6 h-6 flex items-center justify-center text-[var(--foreground-subtle)] hover:text-red-400 transition-colors cursor-pointer flex-shrink-0"
+                        title="Remove member"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showAddMember && (
+                <form onSubmit={handleAddMember} className="pt-3 border-t border-[var(--border)] space-y-3">
+                  {addMemberSuccess ? (
+                    <div className="flex items-center gap-2 text-sm text-emerald-400">
+                      <Mail className="w-4 h-4" /> {addMemberSuccess}
+                      <button type="button" onClick={() => setShowAddMember(false)} className="ml-auto text-[var(--foreground-subtle)] hover:text-[var(--foreground)] cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <input
+                          required
+                          type="text"
+                          placeholder="Full name"
+                          value={memberForm.fullName}
+                          onChange={(e) => setMemberForm((f) => ({ ...f, fullName: e.target.value }))}
+                          className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
+                        />
+                        <input
+                          required
+                          type="email"
+                          placeholder="Email address"
+                          value={memberForm.email}
+                          onChange={(e) => setMemberForm((f) => ({ ...f, email: e.target.value }))}
+                          className="px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Role / job title (optional)"
+                          value={memberForm.jobTitle}
+                          onChange={(e) => setMemberForm((f) => ({ ...f, jobTitle: e.target.value }))}
+                          className="col-span-2 px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
+                        />
+                      </div>
+                      {addMemberError && <p className="text-xs text-red-400">{addMemberError}</p>}
+                      <div className="flex gap-2">
+                        <Button type="button" variant="secondary" size="sm" onClick={() => setShowAddMember(false)}>Cancel</Button>
+                        <Button type="submit" size="sm" loading={addingMember} className="gap-1.5"><Mail className="w-3.5 h-3.5" /> Send Invite</Button>
+                      </div>
+                    </>
+                  )}
+                </form>
+              )}
+            </div>
+
           </div>
         )}
 

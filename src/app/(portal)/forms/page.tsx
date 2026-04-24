@@ -27,11 +27,13 @@ export default function FormsPage() {
       if (!user) return;
       setUserId(user.id);
 
-      const { data: projects } = await supabase.from("projects").select("id").eq("client_id", user.id).order("created_at", { ascending: true });
+      const { data: projects } = await supabase.from("projects").select("id").order("created_at", { ascending: true });
       const projectIds = (projects ?? []).map((p) => p.id);
       if (projectIds.length > 0) setProjectId(projectIds[0]);
-      const { data } = await supabase.from("forms").select("*").eq("client_id", user.id).order("created_at", { ascending: false });
-      if (data) setForms(data);
+      if (projectIds.length > 0) {
+        const { data } = await supabase.from("forms").select("*").in("project_id", projectIds).order("created_at", { ascending: false });
+        if (data) setForms(data);
+      }
     }
     init();
   // eslint-disable-next-line react-hooks/exhaustive-deps

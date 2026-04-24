@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>RBRANDR Portal — UX Enhancements</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #09090b; font-family: 'Geist', system-ui, sans-serif; color: #fafafa; }
+  * { box-sizing: border-box; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="../design-canvas.jsx"></script>
+<script type="text/babel" src="components.jsx"></script>
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+
+function App() {
+  return (
+    <DesignCanvas title="Portal · UX Enhancements" subtitle="Low-lift additions that sharpen the existing UI without adding weight">
+      <DCSection id="intro" title="Priority ideas — pick any, compose any">
+        <DCArtboard id="cmdk" label="⌘K Command Palette — jump anywhere, run actions" width={1280} height={820}>
+          <CommandPalette/>
+        </DCArtboard>
+        <DCArtboard id="needs" label="Dashboard: 'Needs your attention' — from info to action" width={1280} height={820}>
+          <NeedsYouCard/>
+        </DCArtboard>
+        <DCArtboard id="approvals" label="One-click approval ribbon — sweep the week" width={1280} height={820}>
+          <ApprovalRibbon/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="nav" title="Navigation + findability">
+        <DCArtboard id="search" label="Global search in topbar — the ⌘K surface, always visible" width={1280} height={820}>
+          <SearchTopbar/>
+        </DCArtboard>
+        <DCArtboard id="breadcrumbs" label="Breadcrumbs + Recently viewed + contextual help popover" width={1280} height={820}>
+          <ContextualHelp/>
+        </DCArtboard>
+        <DCArtboard id="inbox" label="Unified 'Activity' inbox — everything in one feed" width={1280} height={820}>
+          <UnifiedInbox/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="onboard" title="Onboarding + moments of emptiness">
+        <DCArtboard id="empty" label="Guided empty state — instead of a blank page" width={1280} height={820}>
+          <EmptyStates/>
+        </DCArtboard>
+        <DCArtboard id="whatsnew" label="'What's new' drawer — nudges without nagging" width={1280} height={820}>
+          <WhatsNewDrawer/>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

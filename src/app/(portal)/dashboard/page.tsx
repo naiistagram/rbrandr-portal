@@ -16,12 +16,31 @@ export default async function DashboardPage() {
 
   const admin = createAdminClient();
 
-  const [{ data: profile }, { data: projects }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("id", user.id).single(),
+  // Use admin client to avoid RLS issues reading own profile
+  const { data: profile } = await admin.from("profiles").select("*").eq("id", user.id).single();
+
+  // Always fetch both owned projects and projects via membership — a user can be both
+  const [{ data: ownedData }, { data: memberData }] = await Promise.all([
     admin.from("projects").select("*").eq("client_id", user.id).order("created_at", { ascending: false }),
+    admin.from("project_members").select("project_id, projects(*)").eq("user_id", user.id),
   ]);
 
-  const projectIds = (projects ?? []).map((p) => p.id);
+  const ownedProjects = ownedData ?? [];
+  const memberProjects = (memberData ?? [])
+    .map((m) => ((m as unknown) as { projects: import("@/lib/supabase/types").Project }).projects)
+    .filter(Boolean);
+
+  // Deduplicate (user might appear as both client_id and project_member on the same project)
+  const seenIds = new Set(ownedProjects.map((p) => p.id));
+  const projects = [
+    ...ownedProjects,
+    ...memberProjects.filter((p) => !seenIds.has(p.id)),
+  ];
+
+  const projectIds = projects.map((p) => p.id);
+  // Contracts only for CEO-role users who own projects directly
+  const isCeo = (profile?.client_role ?? "ceo") === "ceo";
+  const ownedProjectIds = ownedProjects.map((p) => p.id);
 
   const [{ data: allContent }, { data: pendingForms }, { data: pendingContracts }, { data: openTickets }] =
     await Promise.all([
@@ -31,8 +50,9 @@ export default async function DashboardPage() {
       projectIds.length > 0
         ? admin.from("forms").select("*").in("project_id", projectIds).eq("status", "pending").limit(10)
         : Promise.resolve({ data: [] }),
-      projectIds.length > 0
-        ? admin.from("contracts").select("id, title, status").in("project_id", projectIds).eq("status", "pending").limit(10)
+      // Contracts only for CEO-role, direct project owners
+      isCeo && ownedProjectIds.length > 0
+        ? admin.from("contracts").select("id, title, status").in("project_id", ownedProjectIds).eq("status", "pending").limit(10)
         : Promise.resolve({ data: [] }),
       projectIds.length > 0
         ? admin.from("tickets").select("id, title, status, priority").in("project_id", projectIds).eq("status", "open").limit(10)

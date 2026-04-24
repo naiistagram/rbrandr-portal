@@ -24,6 +24,10 @@ export async function GET(request: NextRequest) {
     if (validEmailTypes.includes(type as EmailOtp)) {
       await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as EmailOtp });
     }
+    // Invite links must land on the password-setup page, not the dashboard
+    if (type === "invite") {
+      return NextResponse.redirect(`${origin}/reset-password`);
+    }
   } else if (code) {
     // PKCE code exchange (default Supabase v2)
     await supabase.auth.exchangeCodeForSession(code);
