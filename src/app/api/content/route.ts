@@ -9,19 +9,22 @@ async function getAuthenticatedUser() {
   return user;
 }
 
-// GET /api/content — fetch all content for the logged-in client
+// GET /api/content — fetch all content for the logged-in client or member
 export async function GET() {
   const user = await getAuthenticatedUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
 
-  const { data: projects } = await admin
-    .from("projects")
-    .select("id")
-    .eq("client_id", user.id);
+  const [{ data: ownedProjects }, { data: memberProjects }] = await Promise.all([
+    admin.from("projects").select("id").eq("client_id", user.id),
+    admin.from("project_members").select("project_id").eq("user_id", user.id),
+  ]);
 
-  const projectIds = (projects ?? []).map((p) => p.id);
+  const projectIds = Array.from(new Set([
+    ...(ownedProjects ?? []).map((p) => p.id),
+    ...(memberProjects ?? []).map((m) => m.project_id),
+  ]));
 
   if (projectIds.length === 0) {
     return NextResponse.json({ content: [], projectId: null });
@@ -52,16 +55,14 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Verify the project actually belongs to this user
-  const { data: project } = await admin
-    .from("projects")
-    .select("id")
-    .eq("id", project_id)
-    .eq("client_id", user.id)
-    .single();
+  // Verify the user owns or is a member of this project
+  const [{ data: ownedProject }, { data: membership }] = await Promise.all([
+    admin.from("projects").select("id").eq("id", project_id).eq("client_id", user.id).maybeSingle(),
+    admin.from("project_members").select("id").eq("project_id", project_id).eq("user_id", user.id).maybeSingle(),
+  ]);
 
-  if (!project) {
-    return NextResponse.json({ error: "Project not found or not owned by user" }, { status: 403 });
+  if (!ownedProject && !membership) {
+    return NextResponse.json({ error: "Project not found or access denied" }, { status: 403 });
   }
 
   const { data, error } = await admin
@@ -103,14 +104,12 @@ export async function PATCH(request: NextRequest) {
 
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { data: project } = await admin
-    .from("projects")
-    .select("id")
-    .eq("id", item.project_id)
-    .eq("client_id", user.id)
-    .single();
+  const [{ data: ownedProject }, { data: membership }] = await Promise.all([
+    admin.from("projects").select("id").eq("id", item.project_id).eq("client_id", user.id).maybeSingle(),
+    admin.from("project_members").select("id").eq("project_id", item.project_id).eq("user_id", user.id).maybeSingle(),
+  ]);
 
-  if (!project) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!ownedProject && !membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const updates: Record<string, unknown> = {};
   if (status !== undefined) updates.status = status;

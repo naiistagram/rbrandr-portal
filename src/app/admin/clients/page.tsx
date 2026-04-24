@@ -206,10 +206,11 @@ export default function AdminClientsPage() {
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-medium text-[var(--foreground-muted)] flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5" /> Company (optional)
+                      <Building2 className="w-3.5 h-3.5" /> Company *
                     </label>
                     <input
                       type="text"
+                      required
                       placeholder="Acme Ltd."
                       value={form.companyName}
                       onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
