@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     });
     if (resetError) return NextResponse.json({ error: resetError.message }, { status: 400 });
 
-    const resetUrl = linkData.properties.action_link;
+    const resetUrl = `${appUrl}/auth/callback?token_hash=${linkData.properties.hashed_token}&type=recovery&next=/reset-password`;
     const { error: emailError } = await resend.emails.send({
       from: "rbrandr Portal <notifications@rbrandr.com>",
       to: email,

@@ -3,11 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export default function ForgotPasswordPage() {
-  const supabase = createClient();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -18,13 +16,15 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError("");
 
-    const redirectTo = `${window.location.origin}/auth/callback?next=/reset-password`;
-
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    const res = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
 
     setLoading(false);
-    if (err) {
-      setError(err.message);
+    if (!res.ok) {
+      setError("Something went wrong. Please try again.");
     } else {
       setSent(true);
     }
