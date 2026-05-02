@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, Settings, LogOut, ChevronRight, Shield } from "lucide-react";
+import { LayoutDashboard, Users, Settings, LogOut, ChevronRight, Shield, Menu, X } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   const router = useRouter();
   const supabase = createClient();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     supabase.from("profiles").select("avatar_url").eq("id", user.id).single().then(({ data }) => {
@@ -36,20 +37,51 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     router.push("/login");
   }
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-60 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col z-40">
+    <>
+      {/* Mobile top bar */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-[var(--surface)] border-b border-[var(--border)] flex items-center px-4 z-50">
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="p-2 -ml-2 text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <div className="flex-1 flex items-center justify-center">
+          <Image src="/logo.svg" alt="RBRANDR" width={24} height={24} />
+        </div>
+        <div className="w-9" />
+      </header>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+    <aside className={cn(
+      "fixed left-0 top-0 h-full w-60 bg-[var(--surface)] border-r border-[var(--border)] flex flex-col z-50 transition-transform duration-300 ease-in-out",
+      mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+    )}>
       {/* Logo */}
       <div className="px-5 py-5 border-b border-[var(--border)]">
         <div className="flex items-center gap-2.5">
           <Image src="/logo.svg" alt="RBRANDRSPHERE" width={28} height={28} className="flex-shrink-0" />
-          <div>
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <p className="text-[11px] font-bold text-[var(--foreground)] tracking-tight">RBRANDRSPHERE</p>
+              <p className="text-[11px] font-bold text-[var(--foreground)] tracking-tight truncate">RBRANDRSPHERE</p>
               <span className="beta-pill flex-shrink-0">Beta</span>
             </div>
             <div className="flex items-center gap-1 mt-0.5">
@@ -57,6 +89,13 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
               <p className="text-[10px] text-[var(--accent)] uppercase tracking-widest font-semibold">Admin</p>
             </div>
           </div>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="lg:hidden ml-auto p-1 text-[var(--foreground-subtle)] hover:text-[var(--foreground)] transition-colors"
+            aria-label="Close menu"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -127,5 +166,6 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         </div>
       </div>
     </aside>
+    </>
   );
 }

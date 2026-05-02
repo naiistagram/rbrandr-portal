@@ -82,13 +82,13 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
   const unread = notifications.filter((n) => !n.read).length;
 
   return (
-    <header className="h-14 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 z-30">
-      <div>
-        <h1 className="text-sm font-semibold text-[var(--foreground)]">{title}</h1>
-        {subtitle && <p className="text-xs text-[var(--foreground-subtle)]">{subtitle}</p>}
+    <header className="h-14 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-sm flex items-center justify-between px-4 lg:px-6 sticky top-14 lg:top-0 z-30">
+      <div className="min-w-0 flex-1 mr-3">
+        <h1 className="text-sm font-semibold text-[var(--foreground)] truncate">{title}</h1>
+        {subtitle && <p className="text-xs text-[var(--foreground-subtle)] truncate hidden lg:block">{subtitle}</p>}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
         {/* Search trigger */}
         <CommandPalette />
 

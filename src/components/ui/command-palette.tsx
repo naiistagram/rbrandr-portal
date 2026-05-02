@@ -263,14 +263,14 @@ export function CommandPalette() {
 
   return (
     <>
-      {/* Trigger button */}
+      {/* Desktop trigger */}
       <button
         ref={triggerRef}
         onClick={() => { setOpen(true); setQuery(""); }}
         aria-label="Open search (Command+K)"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="flex items-center gap-2.5 h-9 px-3 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground-muted)] text-xs min-w-[220px] max-w-[320px] hover:bg-[var(--surface-2)] hover:border-[var(--foreground-subtle)]/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]/30 transition-all duration-150 cursor-pointer"
+        className="hidden lg:flex items-center gap-2.5 h-9 px-3 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground-muted)] text-xs min-w-[220px] max-w-[320px] hover:bg-[var(--surface-2)] hover:border-[var(--foreground-subtle)]/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]/30 transition-all duration-150 cursor-pointer"
       >
         <Search className="w-3.5 h-3.5 flex-shrink-0" />
         <span className="flex-1 text-left">Search everything…</span>
@@ -280,6 +280,15 @@ export function CommandPalette() {
           </kbd>
           <kbd className="text-[9px] px-[5px] py-0.5 border border-[var(--border)] rounded-[3px] font-mono">K</kbd>
         </span>
+      </button>
+
+      {/* Mobile trigger — icon only */}
+      <button
+        onClick={() => { setOpen(true); setQuery(""); }}
+        aria-label="Open search"
+        className="lg:hidden w-9 h-9 rounded-lg bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center text-[var(--foreground-muted)] hover:bg-[var(--surface-2)] transition-all duration-150 cursor-pointer"
+      >
+        <Search className="w-4 h-4" />
       </button>
 
       {/* Portal */}
