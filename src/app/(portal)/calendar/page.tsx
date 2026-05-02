@@ -221,6 +221,102 @@ export default function CalendarPage() {
 
   const inputClass = "w-full px-3.5 py-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] text-sm outline-none focus:border-[var(--accent)] transition-all";
 
+  function DetailPanelBody() {
+    if (!selected) return null;
+    return (
+      <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <StatusDot status={selected.status} />
+          <span className={cn("text-xs font-semibold", STATUS_CONFIG[selected.status as keyof typeof STATUS_CONFIG]?.color)}>
+            {STATUS_CONFIG[selected.status as keyof typeof STATUS_CONFIG]?.label}
+          </span>
+        </div>
+        <div>
+          <h4 className="text-base font-bold text-[var(--foreground)]">{selected.title}</h4>
+          {selected.scheduled_date && (
+            <p className="text-xs text-[var(--foreground-subtle)] mt-1">
+              Scheduled: {format(parseISO(selected.scheduled_date), "d MMM yyyy")}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {selected.platform && <Badge variant="default">{selected.platform}</Badge>}
+          {selected.content_type && <Badge variant="purple" className="capitalize">{selected.content_type}</Badge>}
+        </div>
+        {selected.description && (
+          <div>
+            <p className="text-xs font-semibold text-[var(--foreground-muted)] mb-1.5 uppercase tracking-wider">Description</p>
+            <p className="text-sm text-[var(--foreground-muted)] leading-relaxed whitespace-pre-line">{selected.description}</p>
+          </div>
+        )}
+        {selected.file_urls && selected.file_urls.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-[var(--foreground-muted)] mb-2 uppercase tracking-wider flex items-center gap-1.5">
+              <Paperclip className="w-3 h-3" /> Attachments ({selected.file_urls.length})
+            </p>
+            {(() => {
+              const images = selected.file_urls.filter((u) => /\.(png|jpg|jpeg|gif|webp)/i.test(u) || (u.includes("storage") && !u.includes(".pdf") && !u.includes(".zip")));
+              const pdfs = selected.file_urls.filter((u) => /\.pdf$/i.test(u));
+              const files = selected.file_urls.filter((u) => !images.includes(u) && !pdfs.includes(u));
+              return (
+                <div className="space-y-2">
+                  {images.length > 0 && (
+                    <div className={cn("grid gap-1.5", images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+                      {images.map((url, i) => (
+                        <button key={url} onClick={() => openViewer(selected.file_urls!, selected.file_urls!.indexOf(url), selected.id)} className="relative aspect-square rounded-lg overflow-hidden bg-[var(--surface-2)] cursor-pointer group">
+                          <img src={url} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {pdfs.map((url) => (
+                    <div key={url} className="rounded-lg overflow-hidden border border-[var(--border)]">
+                      <iframe src={url} className="w-full border-0" style={{ height: "280px" }} title="PDF attachment" />
+                    </div>
+                  ))}
+                  {files.map((url, i) => {
+                    const isAnn = url.includes("annotation-") && url.endsWith(".png");
+                    const origIdx = selected.file_urls!.indexOf(url);
+                    return (
+                      <button key={url} onClick={() => openViewer(selected.file_urls!, origIdx, selected.id)} className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] hover:border-zinc-500 transition-all text-xs cursor-pointer">
+                        <span className={cn("flex-1 truncate", isAnn ? "text-amber-400" : "text-[var(--accent)]")}>{isAnn ? "📝 Annotation" : `📎 File ${i + 1}`}</span>
+                        <span className="text-[var(--foreground-subtle)] text-[10px] flex-shrink-0">View →</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+        {selected.feedback && (
+          <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
+            <p className="text-xs font-semibold text-[var(--foreground-muted)] mb-1 flex items-center gap-1.5"><MessageSquare className="w-3 h-3" /> Feedback</p>
+            <p className="text-sm text-[var(--foreground-muted)]">{selected.feedback}</p>
+          </div>
+        )}
+        {selected.status === "in_review" && (
+          <div className="space-y-3 pt-2">
+            <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Your Response</p>
+            <textarea value={feedback} onChange={(e) => setFeedback(e.target.value)} placeholder="Add feedback or notes (optional)…" rows={3} className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] outline-none focus:border-[var(--accent)] resize-none transition-all" />
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="danger" size="sm" loading={submitting} onClick={() => updateStatus(selected.id, "rejected")} className="gap-1.5"><XCircle className="w-3.5 h-3.5" /> Reject</Button>
+              <Button size="sm" loading={submitting} onClick={() => updateStatus(selected.id, "approved")} className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"><CheckCircle2 className="w-3.5 h-3.5" /> Approve</Button>
+            </div>
+          </div>
+        )}
+        {selected.status === "draft" && (
+          <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-dashed border-[var(--border)]">
+            <div className="flex items-center gap-2 text-xs text-[var(--foreground-subtle)]">
+              <Clock className="w-3.5 h-3.5" />
+              This content is being prepared and will be sent for your review soon.
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // Sorted items for list view
   const sortedItems = [...items].sort((a, b) => {
     if (!a.scheduled_date && !b.scheduled_date) return 0;
@@ -641,152 +737,37 @@ export default function CalendarPage() {
           </div>
         )}
 
-        {/* Content detail panel */}
+        {/* Desktop: side panel */}
         {selected && (
-          <div className="w-80 border-l border-[var(--border)] bg-[var(--surface)] flex flex-col animate-fade-in flex-shrink-0">
+          <div className="hidden lg:flex w-80 border-l border-[var(--border)] bg-[var(--surface)] flex-col animate-fade-in flex-shrink-0">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
               <h3 className="text-sm font-semibold text-[var(--foreground)]">Content Details</h3>
               <button onClick={() => setSelected(null)} className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] transition-colors cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* Status */}
-              <div className="flex items-center gap-2">
-                <StatusDot status={selected.status} />
-                <span className={cn("text-xs font-semibold", STATUS_CONFIG[selected.status as keyof typeof STATUS_CONFIG]?.color)}>
-                  {STATUS_CONFIG[selected.status as keyof typeof STATUS_CONFIG]?.label}
-                </span>
-              </div>
-
-              <div>
-                <h4 className="text-base font-bold text-[var(--foreground)]">{selected.title}</h4>
-                {selected.scheduled_date && (
-                  <p className="text-xs text-[var(--foreground-subtle)] mt-1">
-                    Scheduled: {format(parseISO(selected.scheduled_date), "d MMM yyyy")}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {selected.platform && <Badge variant="default">{selected.platform}</Badge>}
-                {selected.content_type && <Badge variant="purple" className="capitalize">{selected.content_type}</Badge>}
-              </div>
-
-              {selected.description && (
-                <div>
-                  <p className="text-xs font-semibold text-[var(--foreground-muted)] mb-1.5 uppercase tracking-wider">Description</p>
-                  <p className="text-sm text-[var(--foreground-muted)] leading-relaxed whitespace-pre-line">{selected.description}</p>
-                </div>
-              )}
-
-              {/* Attachments — show images inline, files as links */}
-              {selected.file_urls && selected.file_urls.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-[var(--foreground-muted)] mb-2 uppercase tracking-wider flex items-center gap-1.5">
-                    <Paperclip className="w-3 h-3" /> Attachments ({selected.file_urls.length})
-                  </p>
-                  {/* Image thumbnails grid */}
-                  {(() => {
-                    const images = selected.file_urls.filter((u) => /\.(png|jpg|jpeg|gif|webp)/i.test(u) || (u.includes("storage") && !u.includes(".pdf") && !u.includes(".zip")));
-                    const pdfs = selected.file_urls.filter((u) => /\.pdf$/i.test(u));
-                    const files = selected.file_urls.filter((u) => !images.includes(u) && !pdfs.includes(u));
-                    return (
-                      <div className="space-y-2">
-                        {images.length > 0 && (
-                          <div className={cn(
-                            "grid gap-1.5",
-                            images.length === 1 ? "grid-cols-1" : "grid-cols-2"
-                          )}>
-                            {images.map((url, i) => (
-                              <button
-                                key={url}
-                                onClick={() => openViewer(selected.file_urls!, selected.file_urls!.indexOf(url), selected.id)}
-                                className="relative aspect-square rounded-lg overflow-hidden bg-[var(--surface-2)] cursor-pointer group"
-                              >
-                                <img
-                                  src={url}
-                                  alt={`Attachment ${i + 1}`}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {pdfs.map((url) => (
-                          <div key={url} className="rounded-lg overflow-hidden border border-[var(--border)]">
-                            <iframe
-                              src={url}
-                              className="w-full border-0"
-                              style={{ height: "420px" }}
-                              title="PDF attachment"
-                            />
-                          </div>
-                        ))}
-                        {files.map((url, i) => {
-                          const isAnn = url.includes("annotation-") && url.endsWith(".png");
-                          const origIdx = selected.file_urls!.indexOf(url);
-                          return (
-                            <button
-                              key={url}
-                              onClick={() => openViewer(selected.file_urls!, origIdx, selected.id)}
-                              className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] hover:border-zinc-500 transition-all text-xs cursor-pointer"
-                            >
-                              <span className={cn("flex-1 truncate", isAnn ? "text-amber-400" : "text-[var(--accent)]")}>
-                                {isAnn ? "📝 Annotation" : `📎 File ${i + 1}`}
-                              </span>
-                              <span className="text-[var(--foreground-subtle)] text-[10px] flex-shrink-0">View →</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {selected.feedback && (
-                <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-[var(--border)]">
-                  <p className="text-xs font-semibold text-[var(--foreground-muted)] mb-1 flex items-center gap-1.5">
-                    <MessageSquare className="w-3 h-3" /> Feedback
-                  </p>
-                  <p className="text-sm text-[var(--foreground-muted)]">{selected.feedback}</p>
-                </div>
-              )}
-
-              {/* Approve / Reject */}
-              {selected.status === "in_review" && (
-                <div className="space-y-3 pt-2">
-                  <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Your Response</p>
-                  <textarea
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="Add feedback or notes (optional)…"
-                    rows={3}
-                    className="w-full px-3 py-2 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-sm text-[var(--foreground)] placeholder:text-[var(--foreground-subtle)] outline-none focus:border-[var(--accent)] resize-none transition-all"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="danger" size="sm" loading={submitting} onClick={() => updateStatus(selected.id, "rejected")} className="gap-1.5">
-                      <XCircle className="w-3.5 h-3.5" /> Reject
-                    </Button>
-                    <Button size="sm" loading={submitting} onClick={() => updateStatus(selected.id, "approved")} className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {selected.status === "draft" && (
-                <div className="p-3 rounded-lg bg-[var(--surface-2)] border border-dashed border-[var(--border)]">
-                  <div className="flex items-center gap-2 text-xs text-[var(--foreground-subtle)]">
-                    <Clock className="w-3.5 h-3.5" />
-                    This content is being prepared and will be sent for your review soon.
-                  </div>
-                </div>
-              )}
-            </div>
+            <DetailPanelBody />
           </div>
+        )}
+
+        {/* Mobile: bottom sheet modal */}
+        {selected && (
+          <>
+            <div className="lg:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={() => setSelected(null)} />
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-[var(--surface)] border-t border-[var(--border)] rounded-t-2xl flex flex-col animate-fade-in" style={{ maxHeight: "80vh" }}>
+              {/* Drag handle */}
+              <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+                <div className="w-10 h-1 rounded-full bg-[var(--border)]" />
+              </div>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--border)] flex-shrink-0">
+                <h3 className="text-sm font-semibold text-[var(--foreground)]">Content Details</h3>
+                <button onClick={() => setSelected(null)} className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] transition-colors cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <DetailPanelBody />
+            </div>
+          </>
         )}
       </div>
 

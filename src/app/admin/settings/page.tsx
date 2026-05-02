@@ -76,18 +76,20 @@ export default function SettingsPage() {
     let avatarUrl = profile.avatar_url;
 
     if (avatarFile) {
-      const ext = avatarFile.name.split(".").pop();
-      const filePath = `avatars/${profile.id}.${ext}`;
-      await supabase.storage.from("avatars").upload(filePath, avatarFile, { upsert: true });
-      const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
-      avatarUrl = urlData.publicUrl;
+      const fd = new FormData();
+      fd.append("file", avatarFile);
+      const res = await fetch("/api/avatar", { method: "POST", body: fd });
+      if (res.ok) {
+        const json = await res.json();
+        avatarUrl = json.url;
+      }
     }
 
-    await supabase.from("profiles").update({
-      full_name: form.fullName,
-      company_name: form.company || null,
-      avatar_url: avatarUrl,
-    }).eq("id", profile.id);
+    await fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ full_name: form.fullName, company_name: form.company, avatar_url: avatarUrl }),
+    });
 
     setSaved(true);
     setSaving(false);
