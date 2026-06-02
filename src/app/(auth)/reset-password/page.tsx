@@ -112,7 +112,7 @@ export default function ResetPasswordPage() {
         <h1 className="text-lg font-bold text-[var(--foreground)]">Link expired</h1>
         <p className="text-sm text-[var(--foreground-muted)]">{verifyError}</p>
         <a href="/forgot-password" className="block text-sm text-[var(--accent)] hover:underline">
-          Request a new reset link
+          Request a new link via email
         </a>
       </div>
     );
