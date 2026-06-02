@@ -33,6 +33,7 @@ export default function TicketsPage() {
   const [fileUrls, setFileUrls] = useState<string[]>([]);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | TicketType["status"]>("all");
   const [clientMessages, setClientMessages] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
@@ -69,24 +70,37 @@ export default function TicketsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!projectId) return;
+    setSubmitError(null);
+    if (!projectId) {
+      setSubmitError("No project found for your account. Please contact support.");
+      setSubmitting(false);
+      return;
+    }
     setSubmitting(true);
-    const res = await fetch("/api/tickets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        project_id: projectId,
-        title: form.title,
-        description: form.description,
-        priority: form.priority,
-        file_urls: fileUrls.length > 0 ? fileUrls : null,
-      }),
-    });
-    const json = await res.json();
-    if (json.ticket) setTickets((prev) => [json.ticket, ...prev]);
-    setForm({ title: "", description: "", priority: "medium" });
-    setFileUrls([]);
-    setShowForm(false);
+    try {
+      const res = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_id: projectId,
+          title: form.title,
+          description: form.description,
+          priority: form.priority,
+          file_urls: fileUrls.length > 0 ? fileUrls : null,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSubmitError(json.error ?? "Failed to submit ticket. Please try again.");
+      } else {
+        if (json.ticket) setTickets((prev) => [json.ticket, ...prev]);
+        setForm({ title: "", description: "", priority: "medium" });
+        setFileUrls([]);
+        setShowForm(false);
+      }
+    } catch {
+      setSubmitError("Network error. Please try again.");
+    }
     setSubmitting(false);
   }
 
@@ -205,8 +219,11 @@ export default function TicketsPage() {
                 )}
               </div>
 
+              {submitError && (
+                <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{submitError}</p>
+              )}
               <div className="flex gap-3">
-                <Button type="button" variant="secondary" className="flex-1" onClick={() => { setShowForm(false); setFileUrls([]); }}>Cancel</Button>
+                <Button type="button" variant="secondary" className="flex-1" onClick={() => { setShowForm(false); setFileUrls([]); setSubmitError(null); }}>Cancel</Button>
                 <Button type="submit" className="flex-1" loading={submitting}>Submit Ticket</Button>
               </div>
             </form>
