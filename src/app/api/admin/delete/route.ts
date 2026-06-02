@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const ALLOWED_TABLES = ["contracts", "reports", "documents"] as const;
+const ALLOWED_TABLES = ["contracts", "reports", "documents", "content_items", "milestones", "forms", "assets"] as const;
 type AllowedTable = typeof ALLOWED_TABLES[number];
 
 export async function DELETE(request: NextRequest) {
@@ -19,6 +19,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Invalid table" }, { status: 400 });
   }
 
+  // Delete associated storage file if present
   const { data: record } = await admin.from(table).select("file_url").eq("id", id).single();
   if (record?.file_url) {
     const parts = record.file_url.split("/object/public/");
