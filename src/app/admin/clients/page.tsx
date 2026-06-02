@@ -135,11 +135,13 @@ export default function AdminClientsPage() {
                   groups.push({ company: raw, clients: [c] });
                 }
               }
-              // Sort: companies with most clients first; null company last
+              // Sort: most recently active company first (by newest member), null company last
               groups.sort((a, b) => {
                 if (!a.company && b.company) return 1;
                 if (a.company && !b.company) return -1;
-                return (a.company ?? "").localeCompare(b.company ?? "");
+                const aLatest = Math.max(...a.clients.map((c) => new Date(c.created_at).getTime()));
+                const bLatest = Math.max(...b.clients.map((c) => new Date(c.created_at).getTime()));
+                return bLatest - aLatest;
               });
 
               return groups.map((group) => (

@@ -153,8 +153,12 @@ export default async function CompanyPage({
     hasProjects
       ? admin.from("forms").select("*").in("project_id", projectIds).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
-    admin.from("tickets").select("*").in("submitted_by", clientIds).order("created_at", { ascending: false }),
-    admin.from("feedback").select("*, profiles(full_name, email)").in("submitted_by", clientIds).order("created_at", { ascending: false }),
+    hasProjects
+      ? admin.from("tickets").select("*, profiles!submitted_by(id, full_name, email)").in("project_id", projectIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
+    hasProjects
+      ? admin.from("feedback").select("*, profiles!submitted_by(id, full_name, email)").in("project_id", projectIds).order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
   ]);
 
   const tabCounts: Record<Tab, number> = {
@@ -644,8 +648,9 @@ export default async function CompanyPage({
           <div className="space-y-2">
             {(tickets ?? []).length === 0 ? <EmptyState label="No tickets yet." /> : (
               (tickets ?? []).map((ticket) => {
-                const t = ticket as { id: string; title: string; status: string; priority: string; created_at: string; submitted_by: string; admin_response?: string | null };
-                const submitter = clientMap[t.submitted_by];
+                const t = ticket as { id: string; title: string; status: string; priority: string; created_at: string; submitted_by: string; admin_response?: string | null; profiles?: { id: string; full_name: string; email: string } | null };
+                const submitterName = t.profiles?.full_name ?? clientMap[t.submitted_by]?.full_name ?? "Unknown";
+                const isClient = !!clientMap[t.submitted_by];
                 return (
                   <Link
                     key={t.id}
@@ -656,7 +661,7 @@ export default async function CompanyPage({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[var(--foreground)] truncate">{t.title}</p>
                       <p className="text-[10px] text-[var(--foreground-subtle)]">
-                        {submitter?.full_name} · {formatDate(t.created_at)}
+                        {submitterName} · {formatDate(t.created_at)}
                       </p>
                     </div>
                     <span className={cn("text-[10px] font-semibold", PRIORITY_COLORS[t.priority] ?? "text-zinc-400")}>{t.priority}</span>
@@ -668,7 +673,7 @@ export default async function CompanyPage({
                     )}>
                       {t.status}
                     </span>
-                    {submitter && <ClientBadge clientId={submitter.id} name={submitter.full_name} companyName={companyName} />}
+                    {isClient && <ClientBadge clientId={t.submitted_by} name={submitterName} companyName={companyName} />}
                   </Link>
                 );
               })
@@ -681,8 +686,9 @@ export default async function CompanyPage({
           <div className="space-y-2">
             {(feedback ?? []).length === 0 ? <EmptyState label="No feedback yet." /> : (
               (feedback ?? []).map((fb) => {
-                const f = fb as { id: string; message: string; rating?: number | null; created_at: string; submitted_by: string; admin_reply?: string | null; profiles?: { full_name: string; email: string } | null };
-                const submitter = clientMap[f.submitted_by] ?? f.profiles;
+                const f = fb as { id: string; message: string; rating?: number | null; created_at: string; submitted_by: string; admin_reply?: string | null; profiles?: { id: string; full_name: string; email: string } | null };
+                const submitterName = f.profiles?.full_name ?? clientMap[f.submitted_by]?.full_name ?? "Unknown";
+                const isClient = !!clientMap[f.submitted_by];
                 return (
                   <Link
                     key={f.id}
@@ -692,9 +698,7 @@ export default async function CompanyPage({
                     <MessageSquare className="w-4 h-4 text-[var(--foreground-subtle)] flex-shrink-0 mt-0.5" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        {submitter && "full_name" in submitter && (
-                          <span className="text-xs font-medium text-[var(--foreground)]">{(submitter as { full_name: string }).full_name}</span>
-                        )}
+                        <span className="text-xs font-medium text-[var(--foreground)]">{submitterName}</span>
                         {f.rating && (
                           <span className="text-[10px] text-amber-400">{"★".repeat(f.rating)}{"☆".repeat(5 - f.rating)}</span>
                         )}
@@ -705,9 +709,7 @@ export default async function CompanyPage({
                         <p className="text-xs text-[var(--foreground-subtle)] mt-1 pl-2 border-l border-[var(--border)]">Reply: {f.admin_reply}</p>
                       )}
                     </div>
-                    {f.submitted_by && clientMap[f.submitted_by] && (
-                      <ClientBadge clientId={f.submitted_by} name={clientMap[f.submitted_by].full_name} companyName={companyName} />
-                    )}
+                    {isClient && <ClientBadge clientId={f.submitted_by} name={submitterName} companyName={companyName} />}
                   </Link>
                 );
               })
