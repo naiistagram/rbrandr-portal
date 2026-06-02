@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
   const inviteUrl = `${appUrl}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=invite`;
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-  await resend.emails.send({
+  const { error: emailError } = await resend.emails.send({
     from: "RBRANDR Portal <notifications@rbrandr.com>",
     to: email,
     subject: "You've been invited to the RBRANDR Client Portal",
@@ -94,6 +94,11 @@ export async function POST(request: NextRequest) {
 </body>
 </html>`,
   });
+
+  if (emailError) {
+    console.error("[clients/invite] Resend error:", emailError);
+    return NextResponse.json({ error: `User created but invite email failed: ${emailError.message}` }, { status: 500 });
+  }
 
   // The DB trigger creates the profile. Create the project.
   const { data: project, error: projectError } = await admin

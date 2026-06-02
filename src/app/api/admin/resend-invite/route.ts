@@ -17,15 +17,14 @@ export async function POST(request: NextRequest) {
     if (!email) return NextResponse.json({ error: "Email required." }, { status: 400 });
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const redirectTo = `${appUrl}/auth/callback?next=/reset-password`;
 
     let hashedToken: string;
     let linkType: "invite" | "recovery";
 
+    // Try invite first (for new/unconfirmed users), fall back to recovery
     const { data: inviteData, error: inviteError } = await admin.auth.admin.generateLink({
       type: "invite",
       email,
-      options: { redirectTo },
     });
 
     if (!inviteError && inviteData) {
@@ -36,7 +35,6 @@ export async function POST(request: NextRequest) {
       const { data: recoveryData, error: recoveryError } = await admin.auth.admin.generateLink({
         type: "recovery",
         email,
-        options: { redirectTo },
       });
       if (recoveryError || !recoveryData) {
         console.error("[resend-invite] recovery generateLink error:", recoveryError?.message);
@@ -46,7 +44,9 @@ export async function POST(request: NextRequest) {
       linkType = "recovery";
     }
 
-    const resetUrl = `${appUrl}/auth/callback?token_hash=${hashedToken}&type=${linkType}&next=/reset-password`;
+    // Link goes directly to reset-password — browser client calls verifyOtp so
+    // the session lands in readable storage (not httpOnly cookies).
+    const resetUrl = `${appUrl}/reset-password?token_hash=${encodeURIComponent(hashedToken)}&type=${linkType}`;
 
     const resend = new Resend(process.env.RESEND_API_KEY);
     const { error: emailError } = await resend.emails.send({
