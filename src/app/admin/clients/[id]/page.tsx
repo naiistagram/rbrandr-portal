@@ -126,7 +126,7 @@ export default function ClientDetailPage() {
   const [viewingAdminAsset, setViewingAdminAsset] = useState<Asset | null>(null);
   const [ticketMessages, setTicketMessages] = useState<Record<string, string>>({});
   // Team members
-  type MemberRow = { id: string; user_id: string; created_at: string; profiles: { id: string; full_name: string; email: string; avatar_url: string | null; client_role: string } };
+  type MemberRow = { id: string; user_id: string; created_at: string; email_confirmed: boolean; profiles: { id: string; full_name: string; email: string; avatar_url: string | null; client_role: string } };
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberForm, setMemberForm] = useState({ fullName: "", email: "", jobTitle: "" });
@@ -1355,7 +1355,12 @@ export default function ClientDetailPage() {
                         {m.profiles?.full_name?.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[var(--foreground)] truncate">{m.profiles?.full_name}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium text-[var(--foreground)] truncate">{m.profiles?.full_name}</p>
+                          {!m.email_confirmed && (
+                            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 flex-shrink-0 whitespace-nowrap">Awaiting setup</span>
+                          )}
+                        </div>
                         <p className="text-xs text-[var(--foreground-subtle)] truncate">{m.profiles?.email}</p>
                       </div>
                       {(() => {

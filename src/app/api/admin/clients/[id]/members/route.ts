@@ -30,13 +30,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!project) return NextResponse.json({ members: [] });
 
-  const { data: memberships } = await admin
-    .from("project_members")
-    .select("id, user_id, created_at, profiles(id, full_name, email, avatar_url, client_role, job_title)")
-    .eq("project_id", project.id)
-    .order("created_at", { ascending: true });
+  const [{ data: memberships }, { data: authData }] = await Promise.all([
+    admin
+      .from("project_members")
+      .select("id, user_id, created_at, profiles(id, full_name, email, avatar_url, client_role, job_title)")
+      .eq("project_id", project.id)
+      .order("created_at", { ascending: true }),
+    admin.auth.admin.listUsers({ perPage: 1000 }),
+  ]);
 
-  return NextResponse.json({ members: memberships ?? [] });
+  const confirmedEmails = new Set(
+    (authData?.users ?? []).filter((u) => u.email_confirmed_at).map((u) => u.email)
+  );
+
+  const membersWithStatus = (memberships ?? []).map((m) => ({
+    ...m,
+    email_confirmed: confirmedEmails.has((m.profiles as { email?: string })?.email ?? ""),
+  }));
+
+  return NextResponse.json({ members: membersWithStatus });
 }
 
 // POST /api/admin/clients/[id]/members — invite a new team member
@@ -58,6 +70,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .single();
 
   if (!project) return NextResponse.json({ error: "Client has no project." }, { status: 400 });
+
+  // Inherit company name from the parent client's profile
+  const { data: clientProfile } = await admin.from("profiles").select("company_name").eq("id", clientId).single();
+  const companyName = clientProfile?.company_name ?? null;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -134,7 +150,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     client_role: "member",
     job_title: jobTitle?.trim() || null,
     avatar_url: null,
-    company_name: null,
+    company_name: companyName,
   }, { ignoreDuplicates: false });
 
   // Link them to the project
