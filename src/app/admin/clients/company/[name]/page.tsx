@@ -8,6 +8,7 @@ import {
   Ticket as TicketIcon, MessageSquare, ScrollText, ExternalLink, Film, Camera,
 } from "lucide-react";
 import { cn, formatDate, getInitials, STATUS_CONFIG } from "@/lib/utils";
+import CompanyUploadForms from "./CompanyUploadForms";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +101,9 @@ export default async function CompanyPage({
   const clientIds = clients.map((c) => c.id);
   const clientMap = Object.fromEntries(clients.map((c) => [c.id, c]));
 
+  // Primary client is the CEO (or first contact) — uploads go to their project
+  const primaryClient = clients.find((c) => c.client_role === "ceo") ?? clients[0];
+
   // All projects owned by these clients
   const { data: projects } = await admin
     .from("projects")
@@ -111,6 +115,7 @@ export default async function CompanyPage({
   const projectMap = Object.fromEntries((projects ?? []).map((p) => [p.id, p]));
 
   const hasProjects = projectIds.length > 0;
+  const primaryProject = (projects ?? []).find((p) => p.client_id === primaryClient?.id) ?? (projects ?? [])[0];
 
   // Team members across all projects
   const { data: memberships } = hasProjects
@@ -457,6 +462,9 @@ export default async function CompanyPage({
         {/* ── ASSETS ── */}
         {tab === "Assets" && (
           <div className="space-y-2">
+            {primaryClient && primaryProject && (
+              <CompanyUploadForms clientId={primaryClient.id} projectId={primaryProject.id} tab={tab} />
+            )}
             {(assets ?? []).length === 0 ? <EmptyState label="No assets yet." /> : (
               (assets ?? []).map((asset) => {
                 const a = asset as { id: string; name: string; category: string; url: string; created_at: string; project_id: string };
@@ -490,6 +498,9 @@ export default async function CompanyPage({
         {/* ── DOCUMENTS ── */}
         {tab === "Documents" && (
           <div className="space-y-2">
+            {primaryClient && primaryProject && (
+              <CompanyUploadForms clientId={primaryClient.id} projectId={primaryProject.id} tab={tab} />
+            )}
             {(documents ?? []).length === 0 ? <EmptyState label="No documents yet." /> : (
               (documents ?? []).map((doc) => {
                 const d = doc as { id: string; title: string; description?: string | null; file_url: string; created_at: string; project_id: string };
@@ -583,6 +594,9 @@ export default async function CompanyPage({
         {/* ── CONTRACTS & T&Cs ── */}
         {tab === "Contracts & T&Cs" && (
           <div className="space-y-2">
+            {primaryClient && primaryProject && (
+              <CompanyUploadForms clientId={primaryClient.id} projectId={primaryProject.id} tab={tab} />
+            )}
             {(contracts ?? []).length === 0 ? <EmptyState label="No contracts yet." /> : (
               (contracts ?? []).map((contract) => {
                 const c = contract as { id: string; title: string; status: string; type?: string; file_url: string; created_at: string; project_id: string };
@@ -618,6 +632,9 @@ export default async function CompanyPage({
         {/* ── REPORTS ── */}
         {tab === "Reports" && (
           <div className="space-y-2">
+            {primaryClient && primaryProject && (
+              <CompanyUploadForms clientId={primaryClient.id} projectId={primaryProject.id} tab={tab} />
+            )}
             {(reports ?? []).length === 0 ? <EmptyState label="No reports yet." /> : (
               (reports ?? []).map((report) => {
                 const r = report as { id: string; title: string; period?: string | null; file_url: string; created_at: string; project_id: string };
