@@ -94,7 +94,7 @@ export default async function PortalLayout({
         serviceType={serviceType}
         clientRole={clientRole}
       />
-      <main className="flex-1 ml-60 flex flex-col min-h-screen">
+      <main className="flex-1 lg:ml-60 flex flex-col min-h-screen pt-14 lg:pt-0">
         {children}
       </main>
     </div>
