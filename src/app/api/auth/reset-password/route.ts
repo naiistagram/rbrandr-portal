@@ -13,10 +13,13 @@ export async function POST(request: NextRequest) {
   const { data: linkData, error } = await admin.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo: `${appUrl}/auth/callback?next=/reset-password` },
   });
 
-  if (error || !linkData) return NextResponse.json({ ok: true }); // silent — don't reveal missing user
+  if (error) {
+    console.error("[reset-password] generateLink error:", error.message);
+    return NextResponse.json({ ok: true }); // silent — don't reveal missing user
+  }
+  if (!linkData) return NextResponse.json({ ok: true });
 
   const resetUrl = `${appUrl}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
 
