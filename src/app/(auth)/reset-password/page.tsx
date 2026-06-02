@@ -18,40 +18,46 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
   const [verifyError, setVerifyError] = useState("");
-  const verified = useRef(false);
+  const checked = useRef(false);
 
   useEffect(() => {
+    // If the auth callback reported an expired token, show error immediately
+    if (searchParams.get("error") === "expired") {
+      setVerifyError("This link is invalid or has expired. Please request a new one.");
+      return;
+    }
+
+    if (checked.current) return;
+    checked.current = true;
+
     async function establish() {
-      const tokenHash = searchParams.get("token_hash");
-      const type = searchParams.get("type") as "recovery" | "invite" | null;
-
-      if (tokenHash && type) {
-        // Client-side OTP verification — avoids server→cookie→browser propagation issues
-        if (verified.current) return;
-        verified.current = true;
-        const { error: err } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-        if (err) {
-          setVerifyError("This link is invalid or has expired. Please request a new one.");
-          return;
-        }
-        setSessionReady(true);
-        return;
-      }
-
-      // Fallback: session already established (e.g. navigated back, PKCE flow)
+      // Auth callback already ran verifyOtp server-side and set the session
+      // cookie on the redirect response, so getSession() should return it.
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setSessionReady(true);
         return;
       }
 
-      // Listen for auth events (PASSWORD_RECOVERY / SIGNED_IN)
+      // Fallback: listen for PASSWORD_RECOVERY / SIGNED_IN events.
+      // This catches the implicit-flow case where Supabase passes tokens as
+      // hash fragments (#access_token=...) and the browser client fires the event.
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-        if (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") {
+        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
           setSessionReady(true);
         }
       });
-      return () => subscription.unsubscribe();
+
+      // Give the auth state listener 4 seconds; if nothing fires, show error
+      const timeout = setTimeout(() => {
+        setVerifyError("This link is invalid or has expired. Please request a new one.");
+        subscription.unsubscribe();
+      }, 4000);
+
+      return () => {
+        clearTimeout(timeout);
+        subscription.unsubscribe();
+      };
     }
 
     establish();
@@ -117,13 +123,6 @@ export default function ResetPasswordPage() {
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-7 text-center space-y-3 animate-fade-in">
         <div className="w-6 h-6 border-2 border-[var(--accent)] border-t-transparent rounded-full animate-spin mx-auto" />
         <p className="text-sm text-[var(--foreground-muted)]">Verifying your link…</p>
-        <p className="text-xs text-[var(--foreground-subtle)]">
-          If nothing happens,{" "}
-          <a href="/forgot-password" className="text-[var(--accent)] hover:underline">
-            request a new link
-          </a>
-          .
-        </p>
       </div>
     );
   }
