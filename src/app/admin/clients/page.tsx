@@ -31,6 +31,8 @@ export default function AdminClientsPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
+  const [resending, setResending] = useState<string | null>(null);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -42,6 +44,24 @@ export default function AdminClientsPage() {
     if (res.ok) {
       const data = await res.json();
       setClients(data.clients ?? []);
+    }
+  }
+
+  async function handleResendInvite(email: string) {
+    setResending(email);
+    setResendSuccess(null);
+    const res = await fetch("/api/admin/resend-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    setResending(null);
+    if (res.ok) {
+      setResendSuccess(email);
+      setTimeout(() => setResendSuccess(null), 4000);
+    } else {
+      const data = await res.json();
+      alert(data.error ?? "Failed to resend invite.");
     }
   }
 
@@ -171,25 +191,41 @@ export default function AdminClientsPage() {
                     )}
                   </div>
                   {group.clients.map((client) => (
-                    <Link
+                    <div
                       key={client.id}
-                      href={`/admin/clients/${client.id}`}
-                      className="flex items-center gap-4 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-xl hover:border-zinc-600 transition-all"
+                      className="flex items-center gap-3 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-xl hover:border-zinc-600 transition-all"
                     >
-                      <div className="w-10 h-10 rounded-full bg-[var(--accent-subtle)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden text-sm font-bold text-[var(--accent)]">
-                        {client.avatar_url ? (
-                          <img src={client.avatar_url} alt={client.full_name} className="w-full h-full object-cover" />
-                        ) : (
-                          getInitials(client.full_name)
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-[var(--foreground)]">{client.full_name}</p>
-                        <p className="text-xs text-[var(--foreground-subtle)] truncate">{client.email}</p>
-                      </div>
-                      <p className="text-xs text-[var(--foreground-subtle)] hidden md:block">{formatDate(client.created_at)}</p>
-                      <ArrowRight className="w-4 h-4 text-[var(--foreground-subtle)] flex-shrink-0" />
-                    </Link>
+                      <Link href={`/admin/clients/${client.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-[var(--accent-subtle)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden text-sm font-bold text-[var(--accent)]">
+                          {client.avatar_url ? (
+                            <img src={client.avatar_url} alt={client.full_name} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(client.full_name)
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[var(--foreground)]">{client.full_name}</p>
+                          <p className="text-xs text-[var(--foreground-subtle)] truncate">{client.email}</p>
+                        </div>
+                        <p className="text-xs text-[var(--foreground-subtle)] hidden md:block">{formatDate(client.created_at)}</p>
+                      </Link>
+                      <button
+                        onClick={() => handleResendInvite(client.email)}
+                        disabled={resending === client.email}
+                        title="Resend invite email"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer flex-shrink-0 disabled:opacity-50"
+                        style={resendSuccess === client.email
+                          ? { color: "rgb(52 211 153)", borderColor: "rgb(52 211 153 / 0.3)", background: "rgb(52 211 153 / 0.1)" }
+                          : { color: "var(--foreground-muted)", borderColor: "var(--border)", background: "transparent" }
+                        }
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                        {resending === client.email ? "Sending…" : resendSuccess === client.email ? "Sent!" : "Resend invite"}
+                      </button>
+                      <Link href={`/admin/clients/${client.id}`} className="flex-shrink-0">
+                        <ArrowRight className="w-4 h-4 text-[var(--foreground-subtle)]" />
+                      </Link>
+                    </div>
                   ))}
                 </div>
               ));
