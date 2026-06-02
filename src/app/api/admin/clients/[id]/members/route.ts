@@ -78,7 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const inviteUrl = `${appUrl}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=invite`;
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-  await resend.emails.send({
+  const { error: emailError } = await resend.emails.send({
     from: "RBRANDR Portal <notifications@rbrandr.com>",
     to: email,
     subject: "You've been invited to the RBRANDR Client Portal",
@@ -118,6 +118,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 </body>
 </html>`,
   });
+
+  if (emailError) {
+    console.error("[members/invite] Resend error:", emailError);
+    return NextResponse.json({ error: `User invited but email failed: ${emailError.message}` }, { status: 500 });
+  }
 
   // Set client_role = 'member' on their profile (trigger creates the profile row)
   // Use upsert in case trigger hasn't fired yet
