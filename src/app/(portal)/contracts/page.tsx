@@ -21,26 +21,16 @@ export default function ContractsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [userId, setUserId] = useState("");
   const [viewing, setViewing] = useState<Contract | null>(null);
-  const [isMember, setIsMember] = useState(false);
 
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
-
-      const { data: profile } = await supabase.from("profiles").select("client_role").eq("id", user.id).single();
-      if (profile?.client_role === "member") {
-        setIsMember(true);
-        return;
-      }
-
-      // Only project owners (CEO) can see contracts — RLS enforces this too
-      const { data: projects } = await supabase.from("projects").select("id").eq("client_id", user.id).order("created_at", { ascending: true });
-      const projectIds = (projects ?? []).map((p) => p.id);
-      if (projectIds.length > 0) {
-        const { data } = await supabase.from("contracts").select("*").in("project_id", projectIds).order("created_at", { ascending: false });
-        if (data) setContracts(data);
+      const res = await fetch("/api/contracts");
+      if (res.ok) {
+        const data = await res.json();
+        setContracts(data.contracts ?? []);
       }
     }
     init();
@@ -101,24 +91,18 @@ export default function ContractsPage() {
 
     const canvas = canvasRef.current;
     const sigData = canvas?.toDataURL("image/png") ?? "";
+    const signed_at = new Date().toISOString();
 
-    await supabase
-      .from("contracts")
-      .update({
+    await fetch("/api/contracts", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: signing.id,
         status: "signed",
         signature_data: sigData,
         signature_name: signerName.trim().toUpperCase(),
-        signed_at: new Date().toISOString(),
-      })
-      .eq("id", signing.id);
-
-    await supabase.from("notifications").insert({
-      user_id: userId,
-      title: "Contract Signed",
-      message: `You signed "${signing.title}"`,
-      type: "contract",
-      read: false,
-      link: "/contracts",
+        signed_at,
+      }),
     });
 
     setContracts((prev) =>
@@ -145,15 +129,7 @@ export default function ContractsPage() {
       <Topbar title="Contracts" subtitle="Review and sign your agreements" userId={userId} />
 
       <div className="flex-1 p-6 animate-fade-in">
-        {isMember ? (
-          <div className="text-center py-20">
-            <ScrollText className="w-10 h-10 text-[var(--foreground-subtle)] mx-auto mb-3" />
-            <p className="text-sm font-semibold text-[var(--foreground-muted)]">Access restricted</p>
-            <p className="text-xs text-[var(--foreground-subtle)] mt-1">
-              Only the primary account holder can view contracts.
-            </p>
-          </div>
-        ) : contracts.length === 0 ? (
+        {contracts.length === 0 ? (
           <div className="text-center py-20">
             <ScrollText className="w-10 h-10 text-[var(--foreground-subtle)] mx-auto mb-3" />
             <p className="text-sm text-[var(--foreground-muted)]">No contracts yet</p>

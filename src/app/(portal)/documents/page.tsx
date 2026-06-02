@@ -28,12 +28,11 @@ export default function DocumentsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
-      const { data: projects } = await supabase.from("projects").select("id").order("created_at", { ascending: true });
-      const projectIds = (projects ?? []).map((p) => p.id);
-      if (projectIds.length > 0) setProjectId(projectIds[0]);
-      if (projectIds.length > 0) {
-        const { data } = await supabase.from("documents").select("*").in("project_id", projectIds).order("created_at", { ascending: false });
-        if (data) setDocs(data);
+      const res = await fetch("/api/documents");
+      if (res.ok) {
+        const json = await res.json();
+        setDocs(json.documents ?? []);
+        if ((json.projectIds ?? []).length > 0) setProjectId(json.projectIds[0]);
       }
     }
     init();
