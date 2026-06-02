@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -16,21 +17,44 @@ export default function ResetPasswordPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
   const [sessionReady, setSessionReady] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const verified = useRef(false);
 
   useEffect(() => {
-    // Supabase fires SIGNED_IN with type=RECOVERY after the callback exchanges the code
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") {
+    async function establish() {
+      const tokenHash = searchParams.get("token_hash");
+      const type = searchParams.get("type") as "recovery" | "invite" | null;
+
+      if (tokenHash && type) {
+        // Client-side OTP verification — avoids server→cookie→browser propagation issues
+        if (verified.current) return;
+        verified.current = true;
+        const { error: err } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+        if (err) {
+          setVerifyError("This link is invalid or has expired. Please request a new one.");
+          return;
+        }
         setSessionReady(true);
+        return;
       }
-    });
 
-    // Also check if already signed in (callback already ran)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setSessionReady(true);
-    });
+      // Fallback: session already established (e.g. navigated back, PKCE flow)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setSessionReady(true);
+        return;
+      }
 
-    return () => subscription.unsubscribe();
+      // Listen for auth events (PASSWORD_RECOVERY / SIGNED_IN)
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN" || event === "PASSWORD_RECOVERY") {
+          setSessionReady(true);
+        }
+      });
+      return () => subscription.unsubscribe();
+    }
+
+    establish();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -69,6 +93,21 @@ export default function ResetPasswordPage() {
         <p className="text-sm text-[var(--foreground-muted)]">
           Your password has been changed. Redirecting you to the portal…
         </p>
+      </div>
+    );
+  }
+
+  if (verifyError) {
+    return (
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl p-7 text-center space-y-4 animate-fade-in">
+        <div className="w-12 h-12 rounded-full bg-red-400/10 flex items-center justify-center mx-auto">
+          <Lock className="w-6 h-6 text-red-400" />
+        </div>
+        <h1 className="text-lg font-bold text-[var(--foreground)]">Link expired</h1>
+        <p className="text-sm text-[var(--foreground-muted)]">{verifyError}</p>
+        <a href="/forgot-password" className="block text-sm text-[var(--accent)] hover:underline">
+          Request a new reset link
+        </a>
       </div>
     );
   }

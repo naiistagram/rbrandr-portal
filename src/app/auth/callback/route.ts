@@ -18,15 +18,21 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
 
   if (tokenHash && type) {
-    // Older email-based OTP flow (recovery, signup, email_change, etc.)
-    const validEmailTypes = ["signup", "recovery", "invite", "email_change", "magiclink", "email"] as const;
+    // Recovery and invite tokens are verified client-side on /reset-password so the
+    // session is established in the browser directly — no server → cookie → redirect hop.
+    if (type === "recovery") {
+      const params = new URLSearchParams({ token_hash: tokenHash, type });
+      return NextResponse.redirect(`${origin}/reset-password?${params}`);
+    }
+    if (type === "invite") {
+      const params = new URLSearchParams({ token_hash: tokenHash, type });
+      return NextResponse.redirect(`${origin}/reset-password?${params}`);
+    }
+    // Other token types (signup, email_change, magiclink) — exchange server-side
+    const validEmailTypes = ["signup", "email_change", "magiclink", "email"] as const;
     type EmailOtp = typeof validEmailTypes[number];
     if (validEmailTypes.includes(type as EmailOtp)) {
       await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as EmailOtp });
-    }
-    // Invite links must land on the password-setup page, not the dashboard
-    if (type === "invite") {
-      return NextResponse.redirect(`${origin}/reset-password`);
     }
   } else if (code) {
     // PKCE code exchange (default Supabase v2)
