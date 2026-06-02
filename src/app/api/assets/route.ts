@@ -45,6 +45,14 @@ export async function DELETE(request: NextRequest) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const admin = createAdminClient();
+
+  // Delete the storage file first, then the DB record
+  const { data: asset } = await admin.from("assets").select("file_url").eq("id", id).single();
+  if (asset?.file_url) {
+    const path = asset.file_url.split("/storage/v1/object/public/assets/")[1];
+    if (path) await admin.storage.from("assets").remove([path]);
+  }
+
   const { error } = await admin.from("assets").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

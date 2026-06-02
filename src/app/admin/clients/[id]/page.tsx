@@ -779,27 +779,25 @@ export default function ClientDetailPage() {
 
   async function handleDeleteContent(id: string) {
     if (!window.confirm("Delete this content item?")) return;
-    await supabase.from("content_items").delete().eq("id", id);
+    await fetch("/api/admin/delete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "content_items", id }) });
     setContent((prev) => prev.filter((c) => c.id !== id));
   }
 
   async function handleDeleteAsset(asset: Asset) {
     if (!window.confirm("Delete this asset?")) return;
-    const path = asset.file_url.split("/storage/v1/object/public/assets/")[1];
-    if (path) await supabase.storage.from("assets").remove([path]);
-    await supabase.from("assets").delete().eq("id", asset.id);
+    await fetch("/api/admin/delete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "assets", id: asset.id }) });
     setAssets((prev) => prev.filter((a) => a.id !== asset.id));
   }
 
   async function handleDeleteMilestone(id: string) {
     if (!window.confirm("Delete this milestone?")) return;
-    await supabase.from("milestones").delete().eq("id", id);
+    await fetch("/api/admin/delete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "milestones", id }) });
     setMilestones((prev) => prev.filter((m) => m.id !== id));
   }
 
   async function handleDeleteForm(id: string) {
     if (!window.confirm("Delete this form?")) return;
-    await supabase.from("forms").delete().eq("id", id);
+    await fetch("/api/admin/delete", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ table: "forms", id }) });
     setForms((prev) => prev.filter((f) => f.id !== id));
   }
 

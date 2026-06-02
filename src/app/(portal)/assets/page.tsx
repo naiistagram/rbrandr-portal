@@ -126,8 +126,6 @@ export default function AssetsPage() {
   });
 
   async function deleteAsset(asset: Asset) {
-    const path = asset.file_url.split("/storage/v1/object/public/assets/")[1];
-    if (path) await supabase.storage.from("assets").remove([path]);
     await fetch(`/api/assets?id=${asset.id}`, { method: "DELETE" });
     setAssets((prev) => prev.filter((a) => a.id !== asset.id));
   }
