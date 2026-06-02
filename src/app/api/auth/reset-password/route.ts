@@ -18,12 +18,9 @@ export async function POST(request: NextRequest) {
 
   if (error || !linkData) return NextResponse.json({ ok: true }); // silent — don't reveal missing user
 
-  // Link goes directly to the reset page — the page calls verifyOtp client-side
-  // using the browser Supabase client so the resulting session lands in
-  // browser-accessible storage (not httpOnly cookies).
   const resetUrl = `${appUrl}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
 
-  await resend.emails.send({
+  const { error: emailError } = await resend.emails.send({
     from: "RBRANDR Portal <notifications@rbrandr.com>",
     to: email,
     subject: "Reset your password",
@@ -70,6 +67,11 @@ export async function POST(request: NextRequest) {
 </body>
 </html>`,
   });
+
+  if (emailError) {
+    console.error("[reset-password] Resend error:", JSON.stringify(emailError));
+    return NextResponse.json({ ok: false, error: emailError.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
