@@ -9,7 +9,7 @@ import {
   Ticket as TicketIcon, CheckCircle2, Circle, Calendar, Trash2,
   AlignLeft, CheckSquare, List,
   Target, Megaphone, Radio, TrendingUp, Users, Trophy, Eye,
-  Film, Camera, ChevronLeft, ChevronRight, Paperclip, Globe, MessageSquare, Star,
+  Film, Camera, ChevronLeft, ChevronRight, Paperclip, Globe, MessageSquare, Star, Building2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -126,7 +126,7 @@ export default function ClientDetailPage() {
   const [viewingAdminAsset, setViewingAdminAsset] = useState<Asset | null>(null);
   const [ticketMessages, setTicketMessages] = useState<Record<string, string>>({});
   // Team members
-  type MemberRow = { id: string; user_id: string; created_at: string; email_confirmed: boolean; profiles: { id: string; full_name: string; email: string; avatar_url: string | null; client_role: string } };
+  type MemberRow = { id: string; user_id: string; created_at: string; email_confirmed: boolean; profiles: { id: string; full_name: string; email: string; avatar_url: string | null; client_role: string; company_name: string | null } };
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberForm, setMemberForm] = useState({ fullName: "", email: "", jobTitle: "" });
@@ -134,6 +134,8 @@ export default function ClientDetailPage() {
   const [addMemberError, setAddMemberError] = useState("");
   const [addMemberSuccess, setAddMemberSuccess] = useState("");
   const [memberResetSent, setMemberResetSent] = useState<Record<string, boolean>>({});
+  const [companies, setCompanies] = useState<string[]>([]);
+  const [memberCompanyEditing, setMemberCompanyEditing] = useState<string | null>(null);
 
   // Project form
   const [projForm, setProjForm] = useState({
@@ -274,6 +276,11 @@ export default function ClientDetailPage() {
     const { data: templates } = await supabase.from("form_templates").select("*").order("created_at", { ascending: false });
     if (templates) setFormTemplates(templates as typeof formTemplates);
     fetchMembers();
+    // Load company names for the member company dropdown
+    fetch("/api/admin/clients").then(r => r.json()).then(d => {
+      const names = [...new Set<string>((d.clients ?? []).map((c: { company_name?: string }) => c.company_name).filter(Boolean))].sort();
+      setCompanies(names);
+    });
     setLoading(false);
   }
 
@@ -330,6 +337,16 @@ export default function ClientDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userId, clientRole: newRole }),
     });
+    fetchMembers();
+  }
+
+  async function handleMemberCompany(userId: string, company: string) {
+    await fetch(`/api/admin/clients/${clientId}/members`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, company_name: company }),
+    });
+    setMemberCompanyEditing(null);
     fetchMembers();
   }
 
@@ -1362,6 +1379,30 @@ export default function ClientDetailPage() {
                           )}
                         </div>
                         <p className="text-xs text-[var(--foreground-subtle)] truncate">{m.profiles?.email}</p>
+                        {memberCompanyEditing === m.user_id ? (
+                          <div className="flex items-center gap-1 mt-1">
+                            <select
+                              autoFocus
+                              defaultValue={m.profiles?.company_name ?? ""}
+                              onChange={(e) => handleMemberCompany(m.user_id, e.target.value)}
+                              onBlur={() => setMemberCompanyEditing(null)}
+                              className="text-[10px] bg-[var(--surface-2)] border border-[var(--accent)]/40 rounded px-1.5 py-0.5 text-[var(--foreground)] outline-none cursor-pointer"
+                            >
+                              <option value="">No company</option>
+                              {companies.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setMemberCompanyEditing(m.user_id)}
+                            className="flex items-center gap-1 mt-0.5 group cursor-pointer"
+                          >
+                            <Building2 className="w-2.5 h-2.5 text-[var(--foreground-subtle)] group-hover:text-[var(--accent)] transition-colors flex-shrink-0" />
+                            <span className={`text-[10px] truncate transition-colors ${m.profiles?.company_name ? "text-[var(--foreground-subtle)] group-hover:text-[var(--accent)]" : "text-zinc-600 group-hover:text-[var(--accent)]"}`}>
+                              {m.profiles?.company_name ?? "Assign company"}
+                            </span>
+                          </button>
+                        )}
                       </div>
                       {(() => {
                         const jt = (m.profiles as { job_title?: string })?.job_title;
