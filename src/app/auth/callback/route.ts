@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -15,29 +15,51 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=${msg}`);
   }
 
-  const supabase = await createClient();
+  // Determine redirect target
+  const isPasswordFlow = type === "recovery" || type === "invite";
+  const redirectTarget = isPasswordFlow ? `${origin}/reset-password` : `${origin}${next}`;
+  const response = NextResponse.redirect(redirectTarget);
+
+  // Create a Supabase client whose setAll writes cookies directly onto the
+  // redirect response — NOT via cookies() from next/headers (which does NOT
+  // merge into NextResponse objects in Next.js 15+).
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (cookiesToSet) => {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    }
+  );
 
   if (tokenHash && type) {
-    // Recovery and invite tokens are verified client-side on /reset-password so the
-    // session is established in the browser directly — no server → cookie → redirect hop.
-    if (type === "recovery") {
-      const params = new URLSearchParams({ token_hash: tokenHash, type });
-      return NextResponse.redirect(`${origin}/reset-password?${params}`);
-    }
-    if (type === "invite") {
-      const params = new URLSearchParams({ token_hash: tokenHash, type });
-      return NextResponse.redirect(`${origin}/reset-password?${params}`);
-    }
-    // Other token types (signup, email_change, magiclink) — exchange server-side
-    const validEmailTypes = ["signup", "email_change", "magiclink", "email"] as const;
-    type EmailOtp = typeof validEmailTypes[number];
-    if (validEmailTypes.includes(type as EmailOtp)) {
-      await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as EmailOtp });
+    // Verify OTP token — covers recovery, invite, signup, magiclink, email_change
+    const validTypes = ["recovery", "invite", "signup", "email_change", "magiclink", "email"] as const;
+    type OtpType = typeof validTypes[number];
+    if (validTypes.includes(type as OtpType)) {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as OtpType,
+      });
+      if (verifyError) {
+        // Token expired or invalid — send to reset page which shows the error UI
+        if (isPasswordFlow) {
+          return NextResponse.redirect(
+            `${origin}/reset-password?error=expired`
+          );
+        }
+      }
     }
   } else if (code) {
-    // PKCE code exchange (default Supabase v2)
+    // PKCE code exchange
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return response;
 }

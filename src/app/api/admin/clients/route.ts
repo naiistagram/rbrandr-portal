@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       full_name: fullName,
       company_name: companyName || null,
     },
-    redirectTo: `${appUrl}/reset-password`,
+    redirectTo: `${appUrl}/auth/callback?next=/reset-password`,
   });
 
   if (inviteError || !inviteData.user) {
