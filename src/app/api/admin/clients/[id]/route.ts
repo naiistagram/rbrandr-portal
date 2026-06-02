@@ -99,6 +99,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   return NextResponse.json({ ok: true });
 }
 
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: clientId } = await params;
+  const auth = await verifyAdmin();
+  if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  // Delete the auth user — profiles + projects cascade via FK
+  const { error } = await auth.admin.auth.admin.deleteUser(clientId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: clientId } = await params;
   const auth = await verifyAdmin();
