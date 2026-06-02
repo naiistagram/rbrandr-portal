@@ -71,15 +71,19 @@ export default function TicketsPage() {
     e.preventDefault();
     if (!projectId) return;
     setSubmitting(true);
-    const { data } = await supabase.from("tickets").insert({
-      project_id: projectId,
-      submitted_by: userId,
-      title: form.title,
-      description: form.description,
-      priority: form.priority,
-      file_urls: fileUrls.length > 0 ? fileUrls : null,
-    }).select().single();
-    if (data) setTickets((prev) => [data, ...prev]);
+    const res = await fetch("/api/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        project_id: projectId,
+        title: form.title,
+        description: form.description,
+        priority: form.priority,
+        file_urls: fileUrls.length > 0 ? fileUrls : null,
+      }),
+    });
+    const json = await res.json();
+    if (json.ticket) setTickets((prev) => [json.ticket, ...prev]);
     setForm({ title: "", description: "", priority: "medium" });
     setFileUrls([]);
     setShowForm(false);
@@ -94,7 +98,11 @@ export default function TicketsPage() {
     if (!ticket) { setSendingMessage(null); return; }
     const newMsg = { role: "client" as const, text, created_at: new Date().toISOString() };
     const updated = [...(ticket.messages ?? []), newMsg];
-    await supabase.from("tickets").update({ messages: updated }).eq("id", ticketId);
+    await fetch("/api/tickets", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: ticketId, messages: updated }),
+    });
     setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, messages: updated } : t));
     setClientMessages((prev) => ({ ...prev, [ticketId]: "" }));
     setSendingMessage(null);
