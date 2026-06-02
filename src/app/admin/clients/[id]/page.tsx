@@ -147,6 +147,7 @@ export default function ClientDetailPage() {
   const [saveError, setSaveError] = useState("");
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Content form
   const [showContentForm, setShowContentForm] = useState(false);
@@ -366,6 +367,20 @@ export default function ClientDetailPage() {
     setResending(false);
     setResent(true);
     setTimeout(() => setResent(false), 3000);
+  }
+
+  async function handleDeleteAccount() {
+    if (!client) return;
+    if (!confirm(`Delete ${client.full_name}'s account? This will permanently remove their profile, projects, and all associated data. This cannot be undone.`)) return;
+    setDeleting(true);
+    const res = await fetch(`/api/admin/clients/${clientId}`, { method: "DELETE" });
+    if (res.ok) {
+      router.push("/admin/clients");
+    } else {
+      const json = await res.json();
+      alert(json.error ?? "Failed to delete account.");
+      setDeleting(false);
+    }
   }
 
   function loadProjectForm(proj: Project) {
@@ -1021,11 +1036,19 @@ export default function ClientDetailPage() {
               {savingProfile && (
                 <p className="col-span-2 text-xs text-[var(--foreground-subtle)]">Saving…</p>
               )}
-              <div className="col-span-2 pt-1 border-t border-[var(--border)]">
+              <div className="col-span-2 pt-1 border-t border-[var(--border)] space-y-2">
                 <Button variant="secondary" size="sm" loading={resending} onClick={handleResendInvite} className="gap-2 w-full">
                   <Mail className="w-3.5 h-3.5" />
                   {resent ? "✓ Invite sent" : "Resend Invite / Password Reset"}
                 </Button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleting}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-red-400 border border-red-400/20 hover:bg-red-400/10 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {deleting ? "Deleting…" : "Delete Account"}
+                </button>
               </div>
             </div>
 
