@@ -25,7 +25,11 @@ export default function LoginPage() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error || !data.user) {
-      setError("Invalid email or password. Please try again.");
+      if (error?.message?.toLowerCase().includes("email not confirmed")) {
+        setError("You haven't set up your account yet. Please check your email for the invite link.");
+      } else {
+        setError("Invalid email or password. Please try again.");
+      }
       setLoading(false);
       return;
     }
