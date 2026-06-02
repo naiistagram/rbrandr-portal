@@ -39,16 +39,18 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const sendResponseEmail = "admin_response" in body && body.admin_response;
+  const sendResolvedEmail = body.status === "resolved";
 
   // Fetch ticket before update so we have title + submitter
-  const { data: ticket } = sendResponseEmail
+  const needTicket = sendResponseEmail || sendResolvedEmail;
+  const { data: ticket } = needTicket
     ? await admin.from("tickets").select("title, submitted_by").eq("id", ticketId).single()
     : { data: null };
 
   const { error } = await admin.from("tickets").update(updates).eq("id", ticketId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (sendResponseEmail && ticket) {
+  if (needTicket && ticket) {
     const { data: submitter } = await admin
       .from("profiles")
       .select("email")
@@ -57,16 +59,30 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (submitter?.email) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-      await sendPortalEmail({
-        to: [submitter.email],
-        subject: `Your support ticket has been updated — ${ticket.title}`,
-        html: buildEmailHtml({
-          title: "Your ticket has a response",
-          body: `An admin has responded to your support ticket <strong style="color:#fafafa;">"${ticket.title}"</strong>. Log in to view the response.`,
-          ctaText: "View ticket",
-          ctaUrl: `${appUrl}/tickets`,
-        }),
-      });
+
+      if (sendResolvedEmail) {
+        await sendPortalEmail({
+          to: [submitter.email],
+          subject: `Your ticket has been resolved — ${ticket.title}`,
+          html: buildEmailHtml({
+            title: "Ticket resolved",
+            body: `Your support ticket <strong style="color:#fafafa;">"${ticket.title}"</strong> has been marked as resolved. Log in to view the details or reopen it if needed.`,
+            ctaText: "View ticket",
+            ctaUrl: `${appUrl}/tickets`,
+          }),
+        });
+      } else if (sendResponseEmail) {
+        await sendPortalEmail({
+          to: [submitter.email],
+          subject: `Your support ticket has been updated — ${ticket.title}`,
+          html: buildEmailHtml({
+            title: "Your ticket has a response",
+            body: `An admin has responded to your support ticket <strong style="color:#fafafa;">"${ticket.title}"</strong>. Log in to view the response.`,
+            ctaText: "View ticket",
+            ctaUrl: `${appUrl}/tickets`,
+          }),
+        });
+      }
     }
   }
 

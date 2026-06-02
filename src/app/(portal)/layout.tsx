@@ -62,7 +62,8 @@ export default async function PortalLayout({
 
   let displayCompanyName = profile.company_name;
 
-  if (clientRole === "member") {
+  // For members OR any user with no company_name, resolve both from project membership
+  if (clientRole === "member" || !displayCompanyName) {
     const { data: membership } = await admin
       .from("project_members")
       .select("project_id, projects(service_type, client_id)")
