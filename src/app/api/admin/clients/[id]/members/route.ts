@@ -33,7 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const [{ data: memberships }, { data: authData }] = await Promise.all([
     admin
       .from("project_members")
-      .select("id, user_id, created_at, profiles(id, full_name, email, avatar_url, client_role, job_title)")
+      .select("id, user_id, created_at, profiles(id, full_name, email, avatar_url, client_role, job_title, company_name)")
       .eq("project_id", project.id)
       .order("created_at", { ascending: true }),
     admin.auth.admin.listUsers({ perPage: 1000 }),
@@ -171,8 +171,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const admin = await assertAdmin();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { userId, clientRole } = await req.json();
-  if (!userId || !clientRole) return NextResponse.json({ error: "userId and clientRole are required." }, { status: 400 });
+  const { userId, clientRole, company_name } = await req.json();
+  if (!userId) return NextResponse.json({ error: "userId is required." }, { status: 400 });
+
+  if (company_name !== undefined) {
+    const { error } = await admin.from("profiles").update({ company_name: company_name || null }).eq("id", userId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!clientRole) return NextResponse.json({ error: "clientRole is required." }, { status: 400 });
   if (!["ceo", "member"].includes(clientRole)) return NextResponse.json({ error: "Invalid role." }, { status: 400 });
 
   const { error } = await admin.from("profiles").update({ client_role: clientRole }).eq("id", userId);
