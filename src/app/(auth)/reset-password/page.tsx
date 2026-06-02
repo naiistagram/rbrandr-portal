@@ -20,35 +20,63 @@ export default function ResetPasswordPage() {
   const checked = useRef(false);
 
   useEffect(() => {
-    // If the auth callback reported an expired token, show error immediately
+    if (checked.current) return;
+    checked.current = true;
+
     const params = new URLSearchParams(window.location.search);
-    if (params.get("error") === "expired") {
+    const urlError = params.get("error");
+    const tokenHash = params.get("token_hash");
+    const type = params.get("type");
+
+    // Auth callback or Supabase reported an error
+    if (urlError === "expired") {
       setVerifyError("This link is invalid or has expired. Please request a new one.");
       return;
     }
 
-    if (checked.current) return;
-    checked.current = true;
+    // token_hash present — verify OTP client-side so the browser Supabase
+    // client owns the resulting session (server-set httpOnly cookies are
+    // invisible to JavaScript, so server-side verifyOtp doesn't help here).
+    if (tokenHash && type) {
+      // Clean up URL bar so the token isn't visible after use
+      window.history.replaceState({}, "", "/reset-password");
 
+      const validTypes = ["recovery", "invite", "signup", "email_change", "magiclink", "email"] as const;
+      type OtpType = typeof validTypes[number];
+
+      if (validTypes.includes(type as OtpType)) {
+        supabase.auth
+          .verifyOtp({ token_hash: tokenHash, type: type as OtpType })
+          .then(({ error: verifyErr }) => {
+            if (verifyErr) {
+              setVerifyError("This link is invalid or has expired. Please request a new one.");
+            } else {
+              setSessionReady(true);
+            }
+          });
+      } else {
+        setVerifyError("This link is invalid or has expired. Please request a new one.");
+      }
+      return;
+    }
+
+    // No token in URL — check if the user already has a valid session
+    // (e.g. they navigated here while logged in, or via an implicit-flow token).
     async function establish() {
-      // Auth callback already ran verifyOtp server-side and set the session
-      // cookie on the redirect response, so getSession() should return it.
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setSessionReady(true);
         return;
       }
 
-      // Fallback: listen for PASSWORD_RECOVERY / SIGNED_IN events.
-      // This catches the implicit-flow case where Supabase passes tokens as
-      // hash fragments (#access_token=...) and the browser client fires the event.
+      // Fallback: listen for PASSWORD_RECOVERY / SIGNED_IN events fired by
+      // the browser client when it detects hash-fragment tokens in the URL.
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
         if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
           setSessionReady(true);
         }
       });
 
-      // Give the auth state listener 4 seconds; if nothing fires, show error
       const timeout = setTimeout(() => {
         setVerifyError("This link is invalid or has expired. Please request a new one.");
         subscription.unsubscribe();
