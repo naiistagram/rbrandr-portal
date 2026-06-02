@@ -10,13 +10,20 @@ export async function GET(request: NextRequest) {
   const error = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
 
+  // Determine redirect target before error handling so we can send password
+  // flow errors to the reset page instead of login.
+  const isPasswordFlow =
+    type === "recovery" ||
+    type === "invite" ||
+    next === "/reset-password";
+
   if (error) {
+    if (isPasswordFlow) {
+      return NextResponse.redirect(`${origin}/reset-password?error=expired`);
+    }
     const msg = encodeURIComponent(errorDescription ?? error);
     return NextResponse.redirect(`${origin}/login?error=${msg}`);
   }
-
-  // Determine redirect target
-  const isPasswordFlow = type === "recovery" || type === "invite";
   const redirectTarget = isPasswordFlow ? `${origin}/reset-password` : `${origin}${next}`;
   const response = NextResponse.redirect(redirectTarget);
 
