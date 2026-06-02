@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, Users, ArrowRight, X, Mail, User, Building2, Layers } from "lucide-react";
+import { Plus, Search, Users, ArrowRight, X, Mail, User, Building2, Layers, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, getInitials } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
+
+type ClientWithStatus = Profile & { email_confirmed: boolean };
 
 const SERVICE_TYPES = [
   { value: "social_media", label: "Social Media" },
@@ -18,7 +20,7 @@ const SERVICE_TYPES = [
 
 export default function AdminClientsPage() {
   const supabase = createClient();
-  const [clients, setClients] = useState<Profile[]>([]);
+  const [clients, setClients] = useState<ClientWithStatus[]>([]);
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({
@@ -90,6 +92,8 @@ export default function AdminClientsPage() {
     fetchClients();
   }
 
+  const unverifiedCount = clients.filter((c) => !c.email_confirmed).length;
+
   const filtered = clients.filter((c) =>
     c.full_name.toLowerCase().includes(search.toLowerCase()) ||
     c.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -104,7 +108,15 @@ export default function AdminClientsPage() {
       <div className="border-b border-[var(--border)] px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-[var(--foreground)]">Clients</h1>
-          <p className="text-sm text-[var(--foreground-muted)]">{clients.length} account{clients.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm text-[var(--foreground-muted)]">
+          {clients.length} account{clients.length !== 1 ? "s" : ""}
+          {unverifiedCount > 0 && (
+            <span className="ml-2 inline-flex items-center gap-1 text-amber-400 text-xs font-medium">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {unverifiedCount} awaiting setup
+            </span>
+          )}
+        </p>
         </div>
         <Button onClick={() => { setShowCreate(true); setCreateSuccess(""); setCreateError(""); }} className="gap-2">
           <Plus className="w-4 h-4" /> Add Client
@@ -143,7 +155,7 @@ export default function AdminClientsPage() {
           <div className="space-y-5">
             {(() => {
               // Group by company_name; normalize key to merge "ACME" / "acme " / " ACME" etc.
-              const groups: { company: string | null; clients: Profile[] }[] = [];
+              const groups: { company: string | null; clients: ClientWithStatus[] }[] = [];
               const seen = new Map<string, number>();
               for (const c of filtered) {
                 const raw = c.company_name?.trim() ?? null;
@@ -164,7 +176,12 @@ export default function AdminClientsPage() {
                 return bLatest - aLatest;
               });
 
-              return groups.map((group) => (
+              return groups.map((group) => {
+                // Unverified clients bubble to top within each group
+                const sortedClients = [...group.clients].sort((a, b) =>
+                  (a.email_confirmed ? 1 : 0) - (b.email_confirmed ? 1 : 0)
+                );
+                return (
                 <div key={group.company ?? "__individual__"} className="space-y-2">
                   <div className="flex items-center gap-2 px-1">
                     <Building2 className="w-3.5 h-3.5 text-[var(--foreground-subtle)]" />
@@ -190,21 +207,30 @@ export default function AdminClientsPage() {
                       <p className="text-xs font-semibold text-[var(--foreground-subtle)] uppercase tracking-wider">No company</p>
                     )}
                   </div>
-                  {group.clients.map((client) => (
+                  {sortedClients.map((client) => (
                     <div
                       key={client.id}
                       className="flex items-center gap-3 p-4 bg-[var(--surface)] border border-[var(--border)] rounded-xl hover:border-zinc-600 transition-all"
                     >
                       <Link href={`/admin/clients/${client.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-                        <div className="w-10 h-10 rounded-full bg-[var(--accent-subtle)] border border-[var(--accent)]/20 flex items-center justify-center flex-shrink-0 overflow-hidden text-sm font-bold text-[var(--accent)]">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden text-sm font-bold ${client.email_confirmed ? "bg-[var(--accent-subtle)] border border-[var(--accent)]/20 text-[var(--accent)]" : "bg-amber-400/10 border border-amber-400/20 text-amber-400"}`}>
                           {client.avatar_url ? (
                             <img src={client.avatar_url} alt={client.full_name} className="w-full h-full object-cover" />
-                          ) : (
+                          ) : client.email_confirmed ? (
                             getInitials(client.full_name)
+                          ) : (
+                            <AlertCircle className="w-4 h-4" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-[var(--foreground)]">{client.full_name}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-[var(--foreground)]">{client.full_name}</p>
+                            {!client.email_confirmed && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 whitespace-nowrap">
+                                Awaiting setup
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-[var(--foreground-subtle)] truncate">{client.email}</p>
                         </div>
                         <p className="text-xs text-[var(--foreground-subtle)] hidden md:block">{formatDate(client.created_at)}</p>
@@ -228,7 +254,8 @@ export default function AdminClientsPage() {
                     </div>
                   ))}
                 </div>
-              ));
+              );
+              });
             })()}
           </div>
         )}

@@ -12,9 +12,21 @@ export async function GET() {
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data: clients } = await admin.from("profiles").select("*").eq("role", "client").order("created_at", { ascending: false });
+  const [{ data: clients }, { data: authData }] = await Promise.all([
+    admin.from("profiles").select("*").eq("role", "client").order("created_at", { ascending: false }),
+    admin.auth.admin.listUsers({ perPage: 1000 }),
+  ]);
 
-  return NextResponse.json({ clients: clients ?? [] });
+  const confirmedEmails = new Set(
+    (authData?.users ?? []).filter((u) => u.email_confirmed_at).map((u) => u.email)
+  );
+
+  const clientsWithStatus = (clients ?? []).map((c) => ({
+    ...c,
+    email_confirmed: confirmedEmails.has(c.email),
+  }));
+
+  return NextResponse.json({ clients: clientsWithStatus });
 }
 
 export async function POST(request: NextRequest) {
