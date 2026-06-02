@@ -9,6 +9,32 @@ async function getAuthenticatedUser() {
   return user;
 }
 
+// GET /api/tickets — fetch project_id and tickets for the current user
+export async function GET() {
+  const user = await getAuthenticatedUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const admin = createAdminClient();
+
+  const [{ data: ownedProjects }, { data: memberships }] = await Promise.all([
+    admin.from("projects").select("id").eq("client_id", user.id).order("created_at", { ascending: true }),
+    admin.from("project_members").select("project_id").eq("user_id", user.id),
+  ]);
+
+  const projectIdSet = new Set<string>();
+  for (const p of ownedProjects ?? []) projectIdSet.add(p.id);
+  for (const m of memberships ?? []) projectIdSet.add(m.project_id);
+  const projectIds = [...projectIdSet];
+
+  const projectId = projectIds[0] ?? null;
+
+  const { data: tickets } = projectIds.length > 0
+    ? await admin.from("tickets").select("*").in("project_id", projectIds).eq("submitted_by", user.id).order("created_at", { ascending: false })
+    : { data: [] };
+
+  return NextResponse.json({ projectId, tickets: tickets ?? [] });
+}
+
 // POST /api/tickets — create a new ticket
 export async function POST(request: NextRequest) {
   const user = await getAuthenticatedUser();

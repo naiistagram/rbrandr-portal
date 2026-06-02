@@ -149,7 +149,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     { data: forms }, { data: tickets }, { data: feedback },
   ] = await Promise.all([
     hasProjects
-      ? admin.from("content_items").select("*").in("project_id", projectIds).order("created_at", { ascending: false })
+      ? admin.from("content_items").select("*, profiles!created_by(id, full_name)").in("project_id", projectIds).order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
     // Contracts only for owned projects (members can't see contracts)
     hasOwned

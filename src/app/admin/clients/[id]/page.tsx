@@ -1715,6 +1715,9 @@ export default function ClientDetailPage() {
                                       </span>
                                     )}
                                   </div>
+                                  {(item as { profiles?: { full_name: string } | null }).profiles?.full_name && (
+                                    <p className="text-[10px] text-[var(--foreground-subtle)]">by {(item as { profiles?: { full_name: string } | null }).profiles!.full_name}</p>
+                                  )}
                                   {item.scheduled_date && <p className="text-[10px] text-[var(--foreground-subtle)]">{formatDate(item.scheduled_date)}</p>}
                                 </div>
                               </button>
