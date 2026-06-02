@@ -1,14 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = createClient();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -22,7 +21,8 @@ export default function ResetPasswordPage() {
 
   useEffect(() => {
     // If the auth callback reported an expired token, show error immediately
-    if (searchParams.get("error") === "expired") {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("error") === "expired") {
       setVerifyError("This link is invalid or has expired. Please request a new one.");
       return;
     }
