@@ -10,23 +10,40 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient();
   const resend = new Resend(process.env.RESEND_API_KEY);
 
-  const { data: linkData, error } = await admin.auth.admin.generateLink({
+  // Try recovery first (confirmed users). If it fails, the user likely exists
+  // but hasn't confirmed their email yet — fall back to invite so they can
+  // still set up their account.
+  let hashed_token: string;
+  let linkType: "recovery" | "invite";
+
+  const { data: recoveryData, error: recoveryError } = await admin.auth.admin.generateLink({
     type: "recovery",
     email,
   });
 
-  if (error) {
-    console.error("[reset-password] generateLink error:", error.message);
-    return NextResponse.json({ ok: true }); // silent — don't reveal missing user
+  if (!recoveryError && recoveryData) {
+    hashed_token = recoveryData.properties.hashed_token;
+    linkType = "recovery";
+  } else {
+    console.error("[reset-password] recovery generateLink failed:", recoveryError?.message);
+    const { data: inviteData, error: inviteError } = await admin.auth.admin.generateLink({
+      type: "invite",
+      email,
+    });
+    if (inviteError || !inviteData) {
+      console.error("[reset-password] invite generateLink also failed:", inviteError?.message);
+      return NextResponse.json({ ok: true }); // user doesn't exist — silent
+    }
+    hashed_token = inviteData.properties.hashed_token;
+    linkType = "invite";
   }
-  if (!linkData) return NextResponse.json({ ok: true });
 
-  const resetUrl = `${appUrl}/reset-password?token_hash=${encodeURIComponent(linkData.properties.hashed_token)}&type=recovery`;
+  const resetUrl = `${appUrl}/reset-password?token_hash=${encodeURIComponent(hashed_token)}&type=${linkType}`;
 
   const { error: emailError } = await resend.emails.send({
     from: "RBRANDR Portal <notifications@rbrandr.com>",
     to: email,
-    subject: "Reset your password",
+    subject: linkType === "invite" ? "Set up your RBRANDR Portal account" : "Reset your password",
     html: `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RBRANDR Portal</title></head>
