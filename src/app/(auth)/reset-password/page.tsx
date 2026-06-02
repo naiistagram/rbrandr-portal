@@ -49,7 +49,7 @@ export default function ResetPasswordPage() {
           .verifyOtp({ token_hash: tokenHash, type: type as OtpType })
           .then(({ error: verifyErr }) => {
             if (verifyErr) {
-              setVerifyError("This link is invalid or has expired. Please request a new one.");
+              setVerifyError(`${verifyErr.message} — Please request a new link.`);
             } else {
               setSessionReady(true);
             }
