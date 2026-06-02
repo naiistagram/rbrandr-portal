@@ -46,8 +46,18 @@ export async function GET(request: NextRequest) {
   );
 
   if (tokenHash && type) {
-    // Verify OTP token — covers recovery, invite, signup, magiclink, email_change
-    const validTypes = ["recovery", "invite", "signup", "email_change", "magiclink", "email"] as const;
+    // For password/invite flows, delegate OTP verification to the browser
+    // client so it can establish the session in its own readable storage
+    // (localStorage + non-httpOnly cookies). Server-set httpOnly session
+    // cookies are invisible to JavaScript, causing getSession() to return
+    // null for logged-out users.
+    if (isPasswordFlow) {
+      const params = new URLSearchParams({ token_hash: tokenHash, type });
+      return NextResponse.redirect(`${origin}/reset-password?${params}`);
+    }
+
+    // For non-password flows (signup, email_change, magiclink), verify server-side
+    const validTypes = ["signup", "email_change", "magiclink", "email"] as const;
     type OtpType = typeof validTypes[number];
     if (validTypes.includes(type as OtpType)) {
       const { error: verifyError } = await supabase.auth.verifyOtp({
@@ -55,12 +65,7 @@ export async function GET(request: NextRequest) {
         type: type as OtpType,
       });
       if (verifyError) {
-        // Token expired or invalid — send to reset page which shows the error UI
-        if (isPasswordFlow) {
-          return NextResponse.redirect(
-            `${origin}/reset-password?error=expired`
-          );
-        }
+        return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(verifyError.message)}`);
       }
     }
   } else if (code) {
