@@ -953,6 +953,9 @@ export default function ClientDetailPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <Button variant="secondary" size="sm" onClick={() => router.push(`/admin/clients/${client.id}/preview`)} className="gap-1.5">
+              <Eye className="w-3.5 h-3.5" /> Preview Dashboard
+            </Button>
             <label className="text-xs text-[var(--foreground-subtle)]">Portal view</label>
             <select
               value={clientServiceType}
