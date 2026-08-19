@@ -79,16 +79,25 @@ export default function SettingsPage() {
 
     try {
       if (avatarFile) {
-        const fd = new FormData();
-        fd.append("file", avatarFile);
-        const res = await fetch("/api/avatar", { method: "POST", body: fd });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          setSaveError(json.error ?? "Failed to upload profile picture. Please try again.");
+        if (avatarFile.size > 5 * 1024 * 1024) {
+          setSaveError("Image is too large. Please choose a file under 5MB.");
           setSaving(false);
           return;
         }
-        avatarUrl = json.url;
+        // Upload directly to Supabase Storage from the browser — routing large
+        // files through the Vercel function hits its ~4.5MB request body limit.
+        const ext = (avatarFile.name.split(".").pop() ?? "jpg").toLowerCase();
+        const filePath = `${profile.id}/avatar.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, avatarFile, { contentType: avatarFile.type, upsert: true });
+        if (uploadError) {
+          setSaveError(uploadError.message || "Failed to upload profile picture. Please try again.");
+          setSaving(false);
+          return;
+        }
+        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+        avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
       }
 
       const profileRes = await fetch("/api/profile", {
