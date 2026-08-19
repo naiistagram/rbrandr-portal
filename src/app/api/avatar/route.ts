@@ -12,7 +12,9 @@ export async function POST(request: NextRequest) {
   if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
 
   const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
-  const filePath = `avatars/${user.id}.${ext}`;
+  // Keyed as "{user.id}/avatar.{ext}" so the "own avatar" storage RLS policy
+  // (which checks the first path segment against auth.uid()) actually matches.
+  const filePath = `${user.id}/avatar.${ext}`;
   const bytes = await file.arrayBuffer();
 
   const admin = createAdminClient();
