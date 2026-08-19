@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendContentStatusEmail } from "@/lib/email";
 
 async function verifyAdmin() {
   const supabase = await createClient();
@@ -37,6 +38,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }).select().single();
 
     if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
+
+    // The status dropdown on this form lets an admin create content directly
+    // as "in_review" — without this, only the separate quick-status dropdown
+    // on an existing item triggered the "ready for review" email.
+    if (data.status === "in_review" || data.status === "approved" || data.status === "published") {
+      await sendContentStatusEmail(data.project_id, data.title, data.status);
+    }
+
     return NextResponse.json({ content: data });
   }
 
@@ -58,6 +67,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
+
+    if (status === "in_review" || status === "approved" || status === "published") {
+      await sendContentStatusEmail(data.project_id, data.title, status);
+    }
+
     return NextResponse.json({ content: data });
   }
 
