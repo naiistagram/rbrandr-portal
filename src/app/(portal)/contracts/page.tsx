@@ -19,6 +19,7 @@ export default function ContractsPage() {
   const [hasSig, setHasSig] = useState(false);
   const [signerName, setSignerName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [signError, setSignError] = useState("");
   const [userId, setUserId] = useState("");
   const [viewing, setViewing] = useState<Contract | null>(null);
 
@@ -88,33 +89,45 @@ export default function ContractsPage() {
   async function submitSignature() {
     if (!signing || !hasSig || !signerName.trim()) return;
     setSubmitting(true);
+    setSignError("");
 
     const canvas = canvasRef.current;
     const sigData = canvas?.toDataURL("image/png") ?? "";
     const signed_at = new Date().toISOString();
 
-    await fetch("/api/contracts", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: signing.id,
-        status: "signed",
-        signature_data: sigData,
-        signature_name: signerName.trim().toUpperCase(),
-        signed_at,
-      }),
-    });
+    try {
+      const res = await fetch("/api/contracts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: signing.id,
+          status: "signed",
+          signature_data: sigData,
+          signature_name: signerName.trim().toUpperCase(),
+          signed_at,
+        }),
+      });
 
-    setContracts((prev) =>
-      prev.map((c) =>
-        c.id === signing.id
-          ? { ...c, status: "signed", signature_data: sigData, signature_name: signerName.trim().toUpperCase(), signed_at: new Date().toISOString() }
-          : c
-      )
-    );
-    setSigning(null);
-    setHasSig(false);
-    setSignerName("");
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setSignError(json.error ?? "Failed to sign contract. Please try again.");
+        setSubmitting(false);
+        return;
+      }
+
+      setContracts((prev) =>
+        prev.map((c) =>
+          c.id === signing.id
+            ? { ...c, status: "signed", signature_data: sigData, signature_name: signerName.trim().toUpperCase(), signed_at: new Date().toISOString() }
+            : c
+        )
+      );
+      setSigning(null);
+      setHasSig(false);
+      setSignerName("");
+    } catch {
+      setSignError("Network error. Please try again.");
+    }
     setSubmitting(false);
   }
 
@@ -306,8 +319,12 @@ export default function ContractsPage() {
                 </button>
               </div>
 
+              {signError && (
+                <p className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{signError}</p>
+              )}
+
               <div className="flex gap-3">
-                <Button variant="secondary" className="flex-1" onClick={() => setSigning(null)}>
+                <Button variant="secondary" className="flex-1" onClick={() => { setSigning(null); setSignError(""); }}>
                   Cancel
                 </Button>
                 <Button

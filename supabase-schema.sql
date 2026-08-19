@@ -355,17 +355,38 @@ create policy "Users can update their own avatar"
   using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
 
 -- Storage policies for assets
-create policy "Authenticated users can view assets"
+-- Files are keyed as "{project_id}/{filename}" — scope access to project members/admins,
+-- not just "any authenticated user" (that previously let any client read/overwrite/delete
+-- any other client's files directly via the Storage API).
+create policy "Project members can view assets"
   on storage.objects for select
-  using (bucket_id = 'assets' and auth.role() = 'authenticated');
+  using (
+    bucket_id = 'assets'
+    and (
+      public.is_project_member(((storage.foldername(name))[1])::uuid)
+      or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    )
+  );
 
-create policy "Authenticated users can upload assets"
+create policy "Project members can upload assets"
   on storage.objects for insert
-  with check (bucket_id = 'assets' and auth.role() = 'authenticated');
+  with check (
+    bucket_id = 'assets'
+    and (
+      public.is_project_member(((storage.foldername(name))[1])::uuid)
+      or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    )
+  );
 
-create policy "Authenticated users can delete own assets"
+create policy "Project members can delete own assets"
   on storage.objects for delete
-  using (bucket_id = 'assets' and auth.role() = 'authenticated');
+  using (
+    bucket_id = 'assets'
+    and (
+      public.is_project_member(((storage.foldername(name))[1])::uuid)
+      or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    )
+  );
 
 -- Storage policies for contracts (authenticated read, admin write)
 create policy "Authenticated users can read contracts"

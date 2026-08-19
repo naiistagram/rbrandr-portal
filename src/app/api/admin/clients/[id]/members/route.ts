@@ -198,14 +198,24 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { membershipId, userId } = await req.json();
   if (!membershipId || !userId) return NextResponse.json({ error: "membershipId and userId are required." }, { status: 400 });
 
+  // Verify the membership actually belongs to a project owned by this client
+  const { data: membership } = await admin
+    .from("project_members")
+    .select("id, user_id, project_id, projects!inner(client_id)")
+    .eq("id", membershipId)
+    .eq("user_id", userId)
+    .single();
+
+  const project = membership?.projects as unknown as { client_id: string } | undefined;
+  if (!membership || project?.client_id !== clientId) {
+    return NextResponse.json({ error: "Membership not found for this client." }, { status: 404 });
+  }
+
   // Remove the project_members row
   await admin.from("project_members").delete().eq("id", membershipId);
 
   // Delete their auth account and profile entirely
   await admin.auth.admin.deleteUser(userId);
-
-  // Verify the client actually owns this project (safety check)
-  void clientId;
 
   return NextResponse.json({ ok: true });
 }

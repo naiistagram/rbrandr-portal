@@ -152,3 +152,68 @@ CREATE POLICY "Project members can view milestones"
 -- 2. New clients created via the admin panel default to client_role = 'ceo'
 -- 3. Members invited via the Members panel get client_role = 'member'
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 6. SECURITY FIX: scope the "assets" storage bucket to project members.
+--    Previously any authenticated user could read/overwrite/delete ANY client's
+--    files in this bucket, since the policies only checked auth.role() =
+--    'authenticated' and not which project the file belonged to. Files are keyed
+--    as "{project_id}/{filename}", so we can check membership via that folder.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "Authenticated users can view assets" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload assets" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can delete own assets" ON storage.objects;
+
+CREATE POLICY "Project members can view assets"
+  ON storage.objects FOR SELECT
+  USING (
+    bucket_id = 'assets'
+    AND (
+      public.is_project_member(((storage.foldername(name))[1])::uuid)
+      OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    )
+  );
+
+CREATE POLICY "Project members can upload assets"
+  ON storage.objects FOR INSERT
+  WITH CHECK (
+    bucket_id = 'assets'
+    AND (
+      public.is_project_member(((storage.foldername(name))[1])::uuid)
+      OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    )
+  );
+
+CREATE POLICY "Project members can delete own assets"
+  ON storage.objects FOR DELETE
+  USING (
+    bucket_id = 'assets'
+    AND (
+      public.is_project_member(((storage.foldername(name))[1])::uuid)
+      OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+    )
+  );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 7. BUG FIX: atomic ticket message append.
+--    Both the client portal and the admin panel previously read the full
+--    `messages` array into local state, appended to it in JS, and wrote the
+--    whole array back. If a client and an admin replied at nearly the same
+--    time, whichever write landed last silently overwrote the other's message.
+--    This RPC appends inside a single UPDATE so concurrent replies can't
+--    clobber each other. Existing "manage own tickets" RLS still applies since
+--    this runs SECURITY INVOKER.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE public.tickets ADD COLUMN IF NOT EXISTS messages jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE OR REPLACE FUNCTION public.append_ticket_message(p_ticket_id uuid, p_message jsonb)
+RETURNS public.tickets
+LANGUAGE sql
+AS $$
+  UPDATE public.tickets
+  SET messages = coalesce(messages, '[]'::jsonb) || jsonb_build_array(p_message)
+  WHERE id = p_ticket_id
+  RETURNING *;
+$$;

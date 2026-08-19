@@ -46,8 +46,17 @@ export async function DELETE(request: NextRequest) {
 
   const admin = createAdminClient();
 
+  const { data: asset } = await admin.from("assets").select("file_url, project_id").eq("id", id).single();
+  if (!asset) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Verify the caller owns or is a member of the asset's project
+  const [{ data: owned }, { data: membership }] = await Promise.all([
+    admin.from("projects").select("id").eq("id", asset.project_id).eq("client_id", user.id).single(),
+    admin.from("project_members").select("user_id").eq("project_id", asset.project_id).eq("user_id", user.id).single(),
+  ]);
+  if (!owned && !membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
   // Delete the storage file first, then the DB record
-  const { data: asset } = await admin.from("assets").select("file_url").eq("id", id).single();
   if (asset?.file_url) {
     const path = asset.file_url.split("/storage/v1/object/public/assets/")[1];
     if (path) await admin.storage.from("assets").remove([path]);
