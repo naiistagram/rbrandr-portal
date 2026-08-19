@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendContentStatusEmail } from "@/lib/email";
 
 async function verifyAdmin() {
   const supabase = await createClient();
@@ -21,14 +22,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { action } = body;
 
   if (action === "add_content") {
-    const { project_id, title, content_type, platform, description, scheduled_date, status, file_urls, created_by } = body;
+    const { project_id, title, content_type, platforms, description, scheduled_date, status, file_urls, created_by } = body;
     if (!project_id || !title) return NextResponse.json({ error: "project_id and title required" }, { status: 400 });
 
     const { data, error } = await auth.admin.from("content_items").insert({
       project_id,
       title,
       content_type: content_type ?? "post",
-      platform: platform ?? null,
+      platforms: Array.isArray(platforms) ? platforms : [],
       description: description ?? null,
       scheduled_date: scheduled_date ?? null,
       status: status ?? "draft",
@@ -37,6 +38,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }).select().single();
 
     if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
+
+    // The status dropdown on this form lets an admin create content directly
+    // as "in_review" — without this, only the separate quick-status dropdown
+    // on an existing item triggered the "ready for review" email.
+    if (data.status === "in_review" || data.status === "approved" || data.status === "published") {
+      await sendContentStatusEmail(data.project_id, data.title, data.status);
+    }
+
     return NextResponse.json({ content: data });
   }
 
@@ -58,6 +67,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .single();
 
     if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
+
+    if (status === "in_review" || status === "approved" || status === "published") {
+      await sendContentStatusEmail(data.project_id, data.title, status);
+    }
+
     return NextResponse.json({ content: data });
   }
 

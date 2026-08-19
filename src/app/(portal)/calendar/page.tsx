@@ -37,6 +37,7 @@ import { Badge, StatusDot } from "@/components/ui/badge";
 import { Topbar } from "@/components/layout/topbar";
 import { FileViewer } from "@/components/ui/file-viewer";
 import { cn, STATUS_CONFIG, formatDate } from "@/lib/utils";
+import { PLATFORM_CONFIG } from "@/lib/content-display";
 import type { ContentItem } from "@/lib/supabase/types";
 
 type ContentStatus = ContentItem["status"];
@@ -45,21 +46,10 @@ type CalView = "month" | "week" | "list";
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
 const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"] as const;
 
-const PLATFORM_CONFIG: Record<string, { dot: string; pill: string }> = {
-  Instagram: { dot: "bg-gradient-to-br from-purple-500 to-pink-500", pill: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
-  Facebook: { dot: "bg-blue-500", pill: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-  TikTok: { dot: "bg-rose-500", pill: "bg-rose-500/10 text-rose-400 border-rose-500/20" },
-  LinkedIn: { dot: "bg-sky-500", pill: "bg-sky-500/10 text-sky-400 border-sky-500/20" },
-  "Twitter/X": { dot: "bg-zinc-400", pill: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20" },
-  YouTube: { dot: "bg-red-500", pill: "bg-red-500/10 text-red-400 border-red-500/20" },
-  Email: { dot: "bg-emerald-500", pill: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  Blog: { dot: "bg-amber-500", pill: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-};
-
 type NewContentForm = {
   title: string;
   content_type: ContentItem["content_type"];
-  platform: string;
+  platforms: string[];
   description: string;
   scheduled_date: string;
 };
@@ -84,7 +74,7 @@ export default function CalendarPage() {
   const [view, setView] = useState<CalView>("month");
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<NewContentForm>({
-    title: "", content_type: "post", platform: "", description: "", scheduled_date: "",
+    title: "", content_type: "post", platforms: [], description: "", scheduled_date: "",
   });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -141,7 +131,7 @@ export default function CalendarPage() {
         project_id: projectId,
         title: createForm.title,
         content_type: createForm.content_type,
-        platform: createForm.platform || null,
+        platforms: createForm.platforms,
         description: createForm.description || null,
         scheduled_date: createForm.scheduled_date || null,
       }),
@@ -156,7 +146,7 @@ export default function CalendarPage() {
 
     if (json.content) setItems((prev) => [...prev, json.content]);
     setShowCreate(false);
-    setCreateForm({ title: "", content_type: "post", platform: "", description: "", scheduled_date: "" });
+    setCreateForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "" });
     setCreating(false);
   }
 
@@ -240,7 +230,7 @@ export default function CalendarPage() {
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {selected.platform && <Badge variant="default">{selected.platform}</Badge>}
+          {selected.platforms.map((p) => <Badge key={p} variant="default">{p}</Badge>)}
           {selected.content_type && <Badge variant="purple" className="capitalize">{selected.content_type}</Badge>}
         </div>
         {selected.description && (
@@ -531,8 +521,8 @@ export default function CalendarPage() {
                               )}
                             >
                               <p className="truncate">{item.title}</p>
-                              {item.platform && (
-                                <p className="text-[10px] opacity-70 truncate">{item.platform}</p>
+                              {item.platforms.length > 0 && (
+                                <p className="text-[10px] opacity-70 truncate">{item.platforms.join(", ")}</p>
                               )}
                             </button>
                           ))
@@ -564,7 +554,7 @@ export default function CalendarPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-[var(--foreground)] truncate">{item.title}</p>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          {item.platform && <span className="text-xs text-[var(--foreground-subtle)]">{item.platform}</span>}
+                          {item.platforms.length > 0 && <span className="text-xs text-[var(--foreground-subtle)]">{item.platforms.join(", ")}</span>}
                           <span className="text-xs text-[var(--foreground-subtle)] capitalize">{item.content_type}</span>
                         </div>
                       </div>
@@ -615,7 +605,7 @@ export default function CalendarPage() {
                 </div>
                 <div className="overflow-y-auto p-4 space-y-2">
                   {dayItems.map((item) => {
-                    const platCfg = item.platform ? PLATFORM_CONFIG[item.platform] : null;
+                    const platCfg = item.platforms[0] ? PLATFORM_CONFIG[item.platforms[0]] : null;
                     const thumb = item.file_urls?.[0];
                     return (
                       <button
@@ -636,10 +626,10 @@ export default function CalendarPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-[var(--foreground)] truncate">{item.title}</p>
                           <div className="flex items-center gap-2 mt-0.5">
-                            {item.platform && platCfg && (
+                            {item.platforms.length > 0 && (
                               <span className="flex items-center gap-1 text-xs text-[var(--foreground-subtle)]">
-                                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", platCfg.dot)} />
-                                {item.platform}
+                                {platCfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", platCfg.dot)} />}
+                                {item.platforms.join(", ")}
                               </span>
                             )}
                             <span className="text-xs text-[var(--foreground-subtle)] capitalize">{item.content_type}</span>
@@ -682,28 +672,19 @@ export default function CalendarPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Platform</label>
+                  <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Platforms</label>
                   <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setCreateForm((f) => ({ ...f, platform: "" }))}
-                      className={cn(
-                        "px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
-                        !createForm.platform
-                          ? "bg-[var(--surface)] border-[var(--foreground-muted)] text-[var(--foreground)]"
-                          : "border-[var(--border)] text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]"
-                      )}
-                    >
-                      None
-                    </button>
                     {PLATFORMS.map((p) => {
                       const cfg = PLATFORM_CONFIG[p];
-                      const active = createForm.platform === p;
+                      const active = createForm.platforms.includes(p);
                       return (
                         <button
                           key={p}
                           type="button"
-                          onClick={() => setCreateForm((f) => ({ ...f, platform: p }))}
+                          onClick={() => setCreateForm((f) => ({
+                            ...f,
+                            platforms: active ? f.platforms.filter((x) => x !== p) : [...f.platforms, p],
+                          }))}
                           className={cn(
                             "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
                             active ? cfg.pill : "border-[var(--border)] text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]"

@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge, StatusDot } from "@/components/ui/badge";
 import { cn, formatDate, STATUS_CONFIG } from "@/lib/utils";
+import { PLATFORM_CONFIG, TYPE_PILL, PLATFORM_ORDER } from "@/lib/content-display";
 import type {
   Profile, Project, ContentItem, Contract, Report,
   Asset, Document as Doc, Milestone as MS, Ticket, Form, Feedback,
@@ -44,28 +45,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: "text-amber-400",
   high: "text-orange-400",
   urgent: "text-red-400",
-};
-
-const PLATFORM_CONFIG: Record<string, { color: string; bg: string; dot: string; pill: string }> = {
-  Instagram: { color: "text-pink-400", bg: "from-purple-600/30 to-pink-600/30", dot: "bg-gradient-to-br from-purple-500 to-pink-500", pill: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
-  Facebook: { color: "text-blue-400", bg: "from-blue-700/30 to-blue-500/30", dot: "bg-blue-500", pill: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-  TikTok: { color: "text-rose-400", bg: "from-zinc-800/80 to-rose-900/30", dot: "bg-rose-500", pill: "bg-rose-500/10 text-rose-400 border-rose-500/20" },
-  LinkedIn: { color: "text-sky-400", bg: "from-sky-700/30 to-sky-500/30", dot: "bg-sky-500", pill: "bg-sky-500/10 text-sky-400 border-sky-500/20" },
-  "Twitter/X": { color: "text-zinc-300", bg: "from-zinc-700/40 to-zinc-600/20", dot: "bg-zinc-400", pill: "bg-zinc-500/10 text-zinc-300 border-zinc-500/20" },
-  YouTube: { color: "text-red-400", bg: "from-red-700/30 to-red-500/20", dot: "bg-red-500", pill: "bg-red-500/10 text-red-400 border-red-500/20" },
-  Email: { color: "text-emerald-400", bg: "from-emerald-700/30 to-emerald-500/20", dot: "bg-emerald-500", pill: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
-  Blog: { color: "text-amber-400", bg: "from-amber-700/30 to-amber-500/20", dot: "bg-amber-500", pill: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
-};
-const PLATFORM_ORDER = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
-const TYPE_PILL: Record<string, string> = {
-  post: "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  story: "bg-purple-500/15 text-purple-400 border-purple-500/20",
-  reel: "bg-pink-500/15 text-pink-400 border-pink-500/20",
-  carousel: "bg-indigo-500/15 text-indigo-400 border-indigo-500/20",
-  ad: "bg-orange-500/15 text-orange-400 border-orange-500/20",
-  email: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  blog: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  other: "bg-zinc-500/15 text-zinc-400 border-zinc-500/20",
 };
 
 function contentIconFn(type: string) {
@@ -154,7 +133,7 @@ export default function ClientDetailPage() {
   // Content form
   const [showContentForm, setShowContentForm] = useState(false);
   const [contentForm, setContentForm] = useState({
-    title: "", content_type: "post" as ContentItem["content_type"], platform: "",
+    title: "", content_type: "post" as ContentItem["content_type"], platforms: [] as string[],
     description: "", scheduled_date: "", status: "draft" as ContentItem["status"],
   });
   const [addingContent, setAddingContent] = useState(false);
@@ -479,7 +458,7 @@ export default function ClientDetailPage() {
         project_id: project.id,
         title: contentForm.title,
         content_type: contentForm.content_type,
-        platform: contentForm.platform || null,
+        platforms: contentForm.platforms,
         description: contentForm.description || null,
         scheduled_date: contentForm.scheduled_date || null,
         status: contentForm.status,
@@ -492,7 +471,7 @@ export default function ClientDetailPage() {
     if (!res.ok) { alert(`Failed to add content: ${json.error}`); setAddingContent(false); return; }
     if (json.content) setContent((prev) => [json.content, ...prev]);
     setShowContentForm(false);
-    setContentForm({ title: "", content_type: "post", platform: "", description: "", scheduled_date: "", status: "draft" });
+    setContentForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", status: "draft" });
     setContentFileUrls([]);
     setAddingContent(false);
   }
@@ -954,7 +933,7 @@ export default function ClientDetailPage() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button variant="secondary" size="sm" onClick={() => router.push(`/admin/clients/${client.id}/preview`)} className="gap-1.5">
-              <Eye className="w-3.5 h-3.5" /> Preview Dashboard
+              <Eye className="w-3.5 h-3.5" /> Preview Portal
             </Button>
             <label className="text-xs text-[var(--foreground-subtle)]">Portal view</label>
             <select
@@ -1522,7 +1501,7 @@ export default function ClientDetailPage() {
                 { key: "rejected", label: "Rejected", color: "data-[active=true]:bg-red-400/15 data-[active=true]:border-red-400/40 data-[active=true]:text-red-400" },
                 { key: "published", label: "Published", color: "data-[active=true]:bg-[var(--accent-subtle)] data-[active=true]:border-[var(--accent)]/40 data-[active=true]:text-[var(--accent)]" },
               ];
-              const platforms = PLATFORM_ORDER.filter((p) => content.some((i) => i.platform === p));
+              const platforms = PLATFORM_ORDER.filter((p) => content.some((i) => i.platforms.includes(p)));
               const statusCounts = {
                 draft: content.filter((i) => i.status === "draft").length,
                 in_review: content.filter((i) => i.status === "in_review").length,
@@ -1568,7 +1547,7 @@ export default function ClientDetailPage() {
                       </button>
                       {platforms.map((p) => {
                         const cfg = PLATFORM_CONFIG[p];
-                        const count = content.filter((i) => i.platform === p).length;
+                        const count = content.filter((i) => i.platforms.includes(p)).length;
                         return (
                           <button key={p} data-active={adminContentPlatform === p}
                             onClick={() => setAdminContentPlatform(p)}
@@ -1603,28 +1582,19 @@ export default function ClientDetailPage() {
                     </select>
                   </div>
                   <div>
-                    <label className={labelClass}>Platform</label>
+                    <label className={labelClass}>Platforms</label>
                     <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setContentForm((f) => ({ ...f, platform: "" }))}
-                        className={cn(
-                          "px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
-                          !contentForm.platform
-                            ? "bg-[var(--surface)] border-[var(--foreground-muted)] text-[var(--foreground)]"
-                            : "border-[var(--border)] text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]"
-                        )}
-                      >
-                        None
-                      </button>
                       {PLATFORMS.map((p) => {
                         const cfg = PLATFORM_CONFIG[p];
-                        const active = contentForm.platform === p;
+                        const active = contentForm.platforms.includes(p);
                         return (
                           <button
                             key={p}
                             type="button"
-                            onClick={() => setContentForm((f) => ({ ...f, platform: p }))}
+                            onClick={() => setContentForm((f) => ({
+                              ...f,
+                              platforms: active ? f.platforms.filter((x) => x !== p) : [...f.platforms, p],
+                            }))}
                             className={cn(
                               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
                               active ? cfg.pill : "border-[var(--border)] text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]"
@@ -1700,14 +1670,14 @@ export default function ClientDetailPage() {
             {content.length > 0 && (() => {
               const filtered = content.filter((i) =>
                 (adminContentStatus === "all" || i.status === adminContentStatus) &&
-                (adminContentPlatform === "all" || i.platform === adminContentPlatform)
+                (adminContentPlatform === "all" || i.platforms.includes(adminContentPlatform))
               );
               const grouped: Record<string, ContentItem[]> = {};
               for (const p of PLATFORM_ORDER) {
-                const g = filtered.filter((i) => i.platform === p);
+                const g = filtered.filter((i) => i.platforms.includes(p));
                 if (g.length) grouped[p] = g;
               }
-              const other = filtered.filter((i) => !i.platform || !PLATFORM_ORDER.includes(i.platform));
+              const other = filtered.filter((i) => i.platforms.length === 0 || i.platforms.every((p) => !PLATFORM_ORDER.includes(p)));
               if (other.length) grouped["Other"] = other;
               if (filtered.length === 0) return (
                 <div className="text-center py-12">
@@ -1730,7 +1700,7 @@ export default function ClientDetailPage() {
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                           {items.map((item) => {
                             const thumb = item.file_urls?.[0];
-                            const platCfg = item.platform ? PLATFORM_CONFIG[item.platform] : null;
+                            const platCfg = item.platforms[0] ? PLATFORM_CONFIG[item.platforms[0]] : null;
                             const CIcon = contentIconFn(item.content_type);
                             return (
                               <button
@@ -1760,12 +1730,15 @@ export default function ClientDetailPage() {
                                   <p className="text-sm font-semibold text-[var(--foreground)] line-clamp-2 leading-tight">{item.title}</p>
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className={cn("text-[10px] font-medium capitalize px-2 py-0.5 rounded border", TYPE_PILL[item.content_type] ?? TYPE_PILL.other)}>{item.content_type}</span>
-                                    {item.platform && platCfg && (
-                                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded border flex items-center gap-1", platCfg.pill)}>
-                                        <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", platCfg.dot)} />
-                                        {item.platform}
-                                      </span>
-                                    )}
+                                    {item.platforms.map((p) => {
+                                      const cfg = PLATFORM_CONFIG[p];
+                                      return (
+                                        <span key={p} className={cn("text-[10px] font-medium px-2 py-0.5 rounded border flex items-center gap-1", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
+                                          {cfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />}
+                                          {p}
+                                        </span>
+                                      );
+                                    })}
                                   </div>
                                   {(item as { profiles?: { full_name: string } | null }).profiles?.full_name && (
                                     <p className="text-[10px] text-[var(--foreground-subtle)]">by {(item as { profiles?: { full_name: string } | null }).profiles!.full_name}</p>
@@ -1818,7 +1791,7 @@ export default function ClientDetailPage() {
                       )}
                     </>
                   ) : (
-                    <div className={cn("w-full h-full min-h-[220px] flex items-center justify-center", adminSelected.platform && PLATFORM_CONFIG[adminSelected.platform] ? `bg-gradient-to-br ${PLATFORM_CONFIG[adminSelected.platform].bg}` : "bg-[var(--surface-2)]")}>
+                    <div className={cn("w-full h-full min-h-[220px] flex items-center justify-center", adminSelected.platforms[0] && PLATFORM_CONFIG[adminSelected.platforms[0]] ? `bg-gradient-to-br ${PLATFORM_CONFIG[adminSelected.platforms[0]].bg}` : "bg-[var(--surface-2)]")}>
                       {(() => { const I = contentIconFn(adminSelected.content_type); return <I className="w-16 h-16 text-white/20" />; })()}
                     </div>
                   )}
@@ -1827,11 +1800,18 @@ export default function ClientDetailPage() {
                 {/* Detail panel */}
                 <div className="flex flex-col flex-1 min-h-0">
                   <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
-                    <div className="flex items-center gap-2">
-                      {adminSelected.platform && PLATFORM_CONFIG[adminSelected.platform] && (
-                        <span className={cn("w-2 h-2 rounded-full", PLATFORM_CONFIG[adminSelected.platform].dot)} />
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {adminSelected.platforms.length > 0 ? adminSelected.platforms.map((p) => {
+                        const cfg = PLATFORM_CONFIG[p];
+                        return (
+                          <span key={p} className="flex items-center gap-1 text-xs font-semibold text-[var(--foreground-muted)]">
+                            {cfg && <span className={cn("w-2 h-2 rounded-full", cfg.dot)} />}
+                            {p}
+                          </span>
+                        );
+                      }) : (
+                        <span className="text-xs font-semibold text-[var(--foreground-muted)]">No platform</span>
                       )}
-                      <span className="text-xs font-semibold text-[var(--foreground-muted)]">{adminSelected.platform ?? "No platform"}</span>
                     </div>
                     <button onClick={() => setAdminSelected(null)} className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] cursor-pointer">
                       <X className="w-4 h-4" />

@@ -55,7 +55,7 @@ export interface ContentItem {
   title: string;
   description: string | null;
   content_type: "post" | "story" | "reel" | "ad" | "email" | "blog" | "other";
-  platform: string | null;
+  platforms: string[];
   status: "draft" | "in_review" | "approved" | "rejected" | "published";
   scheduled_date: string | null;
   file_urls: string[] | null;

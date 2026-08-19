@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getProjectMemberEmails, buildEmailHtml, sendPortalEmail } from "@/lib/email";
+import { sendContentStatusEmail } from "@/lib/email";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -49,33 +49,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (status === "in_review" || status === "approved" || status === "published") {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const memberEmails = await getProjectMemberEmails(item.project_id);
-
-    if (status === "in_review") {
-      await sendPortalEmail({
-        to: memberEmails,
-        subject: `Content ready for your review — ${item.title}`,
-        html: buildEmailHtml({
-          title: "Content is ready for your review",
-          body: `Your account manager has submitted <strong style="color:#fafafa;">"${item.title}"</strong> for your review. Please take a look and let us know your thoughts.`,
-          ctaText: "Review content",
-          ctaUrl: `${appUrl}/calendar`,
-        }),
-      });
-    } else {
-      const label = STATUS_LABELS[status] ?? status;
-      await sendPortalEmail({
-        to: memberEmails,
-        subject: `Your content has been ${label.toLowerCase()} — ${item.title}`,
-        html: buildEmailHtml({
-          title: `Content ${label.toLowerCase()}`,
-          body: `Your content piece <strong style="color:#fafafa;">"${item.title}"</strong> has been <strong style="color:#fafafa;">${label.toLowerCase()}</strong> by your account manager.`,
-          ctaText: "View content",
-          ctaUrl: `${appUrl}/calendar`,
-        }),
-      });
-    }
+    await sendContentStatusEmail(item.project_id, item.title, status);
   }
 
   return NextResponse.json({ item });

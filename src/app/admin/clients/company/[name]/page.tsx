@@ -336,7 +336,7 @@ export default async function CompanyPage({
 
         {/* ── CONTENT ── */}
         {tab === "Content" && (() => {
-          type ContentRow = { id: string; title: string; status: string; updated_at: string; platform?: string | null; content_type?: string | null; file_urls?: string[] | null; project_id: string; profiles?: { full_name: string } | null };
+          type ContentRow = { id: string; title: string; status: string; updated_at: string; platforms?: string[]; content_type?: string | null; file_urls?: string[] | null; project_id: string; profiles?: { full_name: string } | null };
           const allContent = (content ?? []) as ContentRow[];
           if (allContent.length === 0) return <EmptyState label="No content yet." />;
 
@@ -353,9 +353,11 @@ export default async function CompanyPage({
           const PLATFORM_ORDER = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
           const platformGroups: Record<string, typeof allContent> = {};
           for (const item of allContent) {
-            const plat = (item as { platform?: string | null }).platform ?? "Other";
-            if (!platformGroups[plat]) platformGroups[plat] = [];
-            platformGroups[plat].push(item);
+            const plats = item.platforms?.length ? item.platforms : ["Other"];
+            for (const plat of plats) {
+              if (!platformGroups[plat]) platformGroups[plat] = [];
+              platformGroups[plat].push(item);
+            }
           }
           const sortedPlatforms = [
             ...PLATFORM_ORDER.filter((p) => platformGroups[p]),

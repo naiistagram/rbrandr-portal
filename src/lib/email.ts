@@ -103,6 +103,55 @@ export function buildEmailHtml(params: {
 </html>`;
 }
 
+const CONTENT_STATUS_LABELS: Record<string, string> = {
+  in_review: "In Review",
+  approved: "Approved",
+  published: "Published",
+};
+
+/**
+ * Notifies a project's client/members by email when a content item's status
+ * changes to something they care about. Shared by the admin content-status
+ * quick-action and by content creation, so a client is notified regardless
+ * of which admin flow put the item into "in_review".
+ */
+export async function sendContentStatusEmail(
+  projectId: string,
+  itemTitle: string,
+  status: "in_review" | "approved" | "published"
+): Promise<void> {
+  const memberEmails = await getProjectMemberEmails(projectId);
+  if (memberEmails.length === 0) return;
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+  if (status === "in_review") {
+    await sendPortalEmail({
+      to: memberEmails,
+      subject: `Content ready for your review — ${itemTitle}`,
+      html: buildEmailHtml({
+        title: "Content is ready for your review",
+        body: `Your account manager has submitted <strong style="color:#fafafa;">"${itemTitle}"</strong> for your review. Please take a look and let us know your thoughts.`,
+        ctaText: "Review content",
+        ctaUrl: `${appUrl}/calendar`,
+      }),
+    });
+    return;
+  }
+
+  const label = CONTENT_STATUS_LABELS[status] ?? status;
+  await sendPortalEmail({
+    to: memberEmails,
+    subject: `Your content has been ${label.toLowerCase()} — ${itemTitle}`,
+    html: buildEmailHtml({
+      title: `Content ${label.toLowerCase()}`,
+      body: `Your content piece <strong style="color:#fafafa;">"${itemTitle}"</strong> has been <strong style="color:#fafafa;">${label.toLowerCase()}</strong> by your account manager.`,
+      ctaText: "View content",
+      ctaUrl: `${appUrl}/calendar`,
+    }),
+  });
+}
+
 export async function sendPortalEmail(params: {
   to: string[];
   subject: string;
