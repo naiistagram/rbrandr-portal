@@ -35,6 +35,7 @@ export default function AdminClientsPage() {
   const [createSuccess, setCreateSuccess] = useState("");
   const [resending, setResending] = useState<string | null>(null);
   const [resendSuccess, setResendSuccess] = useState<string | null>(null);
+  const [useNewCompany, setUseNewCompany] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -92,6 +93,16 @@ export default function AdminClientsPage() {
     fetchClients();
   }
 
+  // Distinct known company names, deduped case-insensitively (keeps first-seen casing)
+  const existingCompanies = Array.from(
+    new Map(
+      clients
+        .map((c) => c.company_name?.trim())
+        .filter((n): n is string => !!n)
+        .map((n) => [n.toLowerCase(), n] as const)
+    ).values()
+  ).sort((a, b) => a.localeCompare(b));
+
   const unverifiedCount = clients.filter((c) => !c.email_confirmed).length;
 
   const filtered = clients.filter((c) =>
@@ -118,7 +129,7 @@ export default function AdminClientsPage() {
           )}
         </p>
         </div>
-        <Button onClick={() => { setShowCreate(true); setCreateSuccess(""); setCreateError(""); }} className="gap-2">
+        <Button onClick={() => { setShowCreate(true); setCreateSuccess(""); setCreateError(""); setUseNewCompany(false); }} className="gap-2">
           <Plus className="w-4 h-4" /> Add Client
         </Button>
       </div>
@@ -144,7 +155,7 @@ export default function AdminClientsPage() {
             </p>
             {clients.length === 0 && (
               <button
-                onClick={() => setShowCreate(true)}
+                onClick={() => { setShowCreate(true); setUseNewCompany(false); }}
                 className="mt-3 text-sm text-[var(--accent)] hover:underline cursor-pointer"
               >
                 Add your first client
@@ -321,14 +332,48 @@ export default function AdminClientsPage() {
                     <label className="text-xs font-medium text-[var(--foreground-muted)] flex items-center gap-1.5">
                       <Building2 className="w-3.5 h-3.5" /> Company *
                     </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Acme Ltd."
-                      value={form.companyName}
-                      onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
-                      className={inputClass}
-                    />
+                    {useNewCompany || existingCompanies.length === 0 ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          required
+                          autoFocus={existingCompanies.length > 0}
+                          placeholder="Acme Ltd."
+                          value={form.companyName}
+                          onChange={(e) => setForm((f) => ({ ...f, companyName: e.target.value }))}
+                          className={inputClass}
+                        />
+                        {existingCompanies.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => { setUseNewCompany(false); setForm((f) => ({ ...f, companyName: "" })); }}
+                            className="text-xs text-[var(--foreground-subtle)] hover:text-[var(--accent)] whitespace-nowrap px-2 cursor-pointer flex-shrink-0"
+                          >
+                            Choose existing
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <select
+                        required
+                        value={form.companyName}
+                        onChange={(e) => {
+                          if (e.target.value === "__new__") {
+                            setUseNewCompany(true);
+                            setForm((f) => ({ ...f, companyName: "" }));
+                          } else {
+                            setForm((f) => ({ ...f, companyName: e.target.value }));
+                          }
+                        }}
+                        className={inputClass}
+                      >
+                        <option value="" disabled>Select a company…</option>
+                        {existingCompanies.map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                        <option value="__new__">+ Add new company</option>
+                      </select>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">

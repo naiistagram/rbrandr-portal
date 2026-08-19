@@ -767,12 +767,17 @@ export default function ClientDetailPage() {
   async function sendTicketMessage(ticketId: string) {
     const text = (ticketMessages[ticketId] ?? "").trim();
     if (!text) return;
-    const ticket = tickets.find((t) => t.id === ticketId);
-    if (!ticket) return;
     const newMsg = { role: "admin" as const, text, created_at: new Date().toISOString() };
-    const updated = [...(ticket.messages ?? []), newMsg];
-    await supabase.from("tickets").update({ messages: updated as unknown as import("@/lib/supabase/types").Json }).eq("id", ticketId);
-    setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, messages: updated } : t));
+    // Append atomically via RPC — avoids a lost-update race with a concurrent client reply
+    const { data, error } = await supabase.rpc("append_ticket_message", {
+      p_ticket_id: ticketId,
+      p_message: newMsg as unknown as import("@/lib/supabase/types").Json,
+    });
+    if (error) {
+      window.alert(`Failed to send message: ${error.message}`);
+      return;
+    }
+    setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, messages: (data as { messages: typeof t.messages }).messages } : t));
     setTicketMessages((prev) => ({ ...prev, [ticketId]: "" }));
   }
 

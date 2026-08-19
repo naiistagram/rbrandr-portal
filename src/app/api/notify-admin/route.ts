@@ -9,6 +9,14 @@ export async function POST(request: NextRequest) {
 
   const { title, message, type, link } = await request.json();
   if (!title || !message) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+  if (typeof title !== "string" || typeof message !== "string" || title.length > 200 || message.length > 2000) {
+    return NextResponse.json({ error: "Invalid fields" }, { status: 400 });
+  }
+
+  const ALLOWED_TYPES = ["content", "ticket", "contract", "document", "asset"];
+  const notifType = ALLOWED_TYPES.includes(type) ? type : "content";
+  // Only allow same-origin relative links — never trust an absolute/external URL from the caller
+  const safeLink = typeof link === "string" && link.startsWith("/") && !link.startsWith("//") ? link : "/admin/dashboard";
 
   const admin = createAdminClient();
   const { data: adminUsers } = await admin
@@ -24,9 +32,9 @@ export async function POST(request: NextRequest) {
         user_id: a.id,
         title,
         message,
-        type: type ?? "content",
+        type: notifType,
         read: false,
-        link: link ?? "/admin/dashboard",
+        link: safeLink,
       })
     )
   );

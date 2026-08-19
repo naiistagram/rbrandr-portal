@@ -37,6 +37,7 @@ export default function TicketsPage() {
   const [filter, setFilter] = useState<"all" | TicketType["status"]>("all");
   const [clientMessages, setClientMessages] = useState<Record<string, string>>({});
   const [sendingMessage, setSendingMessage] = useState<string | null>(null);
+  const [messageError, setMessageError] = useState<Record<string, string>>({});
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,17 +110,23 @@ export default function TicketsPage() {
     const text = (clientMessages[ticketId] ?? "").trim();
     if (!text) return;
     setSendingMessage(ticketId);
-    const ticket = tickets.find((t) => t.id === ticketId);
-    if (!ticket) { setSendingMessage(null); return; }
-    const newMsg = { role: "client" as const, text, created_at: new Date().toISOString() };
-    const updated = [...(ticket.messages ?? []), newMsg];
-    await fetch("/api/tickets", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: ticketId, messages: updated }),
-    });
-    setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, messages: updated } : t));
-    setClientMessages((prev) => ({ ...prev, [ticketId]: "" }));
+    setMessageError((prev) => ({ ...prev, [ticketId]: "" }));
+    try {
+      const res = await fetch("/api/tickets", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: ticketId, message: { text } }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessageError((prev) => ({ ...prev, [ticketId]: json.error ?? "Failed to send. Please try again." }));
+      } else {
+        setTickets((prev) => prev.map((t) => t.id === ticketId ? json.ticket : t));
+        setClientMessages((prev) => ({ ...prev, [ticketId]: "" }));
+      }
+    } catch {
+      setMessageError((prev) => ({ ...prev, [ticketId]: "Network error. Please try again." }));
+    }
     setSendingMessage(null);
   }
 
@@ -343,6 +350,9 @@ export default function TicketsPage() {
                             )}
                           </button>
                         </div>
+                      )}
+                      {messageError[ticket.id] && (
+                        <p className="mt-2 text-xs text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">{messageError[ticket.id]}</p>
                       )}
 
                       {ticket.admin_response && (

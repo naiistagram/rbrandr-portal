@@ -99,8 +99,8 @@ export async function PATCH(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { id, messages } = body;
-  if (!id || !messages) return NextResponse.json({ error: "id and messages are required" }, { status: 400 });
+  const { id, message } = body;
+  if (!id || !message?.text) return NextResponse.json({ error: "id and message are required" }, { status: 400 });
 
   const admin = createAdminClient();
 
@@ -122,12 +122,11 @@ export async function PATCH(request: NextRequest) {
     if (!ownedProject && !membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { data, error } = await admin
-    .from("tickets")
-    .update({ messages })
-    .eq("id", id)
-    .select()
-    .single();
+  // Append atomically — avoids a lost-update race with a concurrent admin reply
+  const { data, error } = await admin.rpc("append_ticket_message", {
+    p_ticket_id: id,
+    p_message: { role: "client", text: message.text, created_at: new Date().toISOString() },
+  });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

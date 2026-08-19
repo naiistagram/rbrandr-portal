@@ -126,8 +126,17 @@ export default function AssetsPage() {
   });
 
   async function deleteAsset(asset: Asset) {
-    await fetch(`/api/assets?id=${asset.id}`, { method: "DELETE" });
-    setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+    try {
+      const res = await fetch(`/api/assets?id=${asset.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setUploadError(json.error ?? "Failed to delete asset. Please try again.");
+        return;
+      }
+      setAssets((prev) => prev.filter((a) => a.id !== asset.id));
+    } catch {
+      setUploadError("Network error. Please try again.");
+    }
   }
 
   const filtered = assets.filter((a) => {
