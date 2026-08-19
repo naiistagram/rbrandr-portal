@@ -7,7 +7,6 @@ import {
   Swords,
   CheckCircle2,
   Clock,
-  XCircle,
   FileText,
   CalendarDays,
   FolderOpen,
@@ -18,10 +17,13 @@ import {
   X,
   Users,
   Radio,
+  Film,
+  Camera,
 } from "lucide-react";
-import { Badge, StatusDot } from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, STATUS_CONFIG } from "@/lib/utils";
+import { PLATFORM_CONFIG, TYPE_PILL } from "@/lib/content-display";
 import type { Project, ContentItem, Form } from "@/lib/supabase/types";
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -47,14 +49,6 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "text-sky-400 bg-sky-400/10",
 };
 
-const statusMap: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  draft: { label: "Draft", icon: FileText, color: "text-zinc-400" },
-  in_review: { label: "In Review", icon: Clock, color: "text-amber-400" },
-  approved: { label: "Approved", icon: CheckCircle2, color: "text-emerald-400" },
-  rejected: { label: "Rejected", icon: XCircle, color: "text-red-400" },
-  published: { label: "Published", icon: CheckCircle2, color: "text-[var(--accent)]" },
-};
-
 interface Props {
   projects: Project[];
   allContent: ContentItem[];
@@ -69,8 +63,8 @@ interface Props {
 export function DashboardClient({ projects, allContent, pendingForms, pendingContracts, openTickets, preview = false }: Props) {
   const [modalProject, setModalProject] = useState<Project | null>(null);
 
-  const recentContent = allContent.slice(0, 5);
-  const contentInReview = allContent.filter((c) => c.status === "in_review").length;
+  const pendingContent = allContent.filter((c) => c.status === "in_review");
+  const contentInReview = pendingContent.length;
   const contentApproved = allContent.filter((c) => c.status === "approved").length;
   const contentPublished = allContent.filter((c) => c.status === "published").length;
   const totalActions = contentInReview + pendingForms.length + pendingContracts.length + openTickets.length;
@@ -184,95 +178,135 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
         </div>
       )}
 
-      {/* ── Recent content + Pending actions ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CalendarDays className="w-4 h-4 text-[var(--accent)]" />
-              Recent Content
-            </CardTitle>
-            {!preview && <a href="/content" className="text-xs text-[var(--accent)] hover:underline">View all</a>}
-          </CardHeader>
-          {recentContent.length > 0 ? (
-            <div className="space-y-2">
-              {recentContent.map((item) => {
-                const s = statusMap[item.status];
-                const Icon = s?.icon ?? FileText;
-                return (
-                  <div key={item.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--surface-2)] transition-colors">
-                    <Icon className={`w-4 h-4 flex-shrink-0 ${s?.color ?? "text-zinc-400"}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--foreground)] truncate">{item.title}</p>
-                      <p className="text-xs text-[var(--foreground-subtle)]">{formatDate(item.updated_at)}</p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <StatusDot status={item.status} />
-                      <span className="text-xs text-[var(--foreground-muted)]">{s?.label}</span>
+      {/* ── Content pending review ── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-[var(--accent)]" />
+            <h2 className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">
+              Content Pending Review{pendingContent.length > 0 ? ` (${pendingContent.length})` : ""}
+            </h2>
+          </div>
+          {!preview && pendingContent.length > 0 && (
+            <a href="/content" className="text-xs text-[var(--accent)] hover:underline">View all</a>
+          )}
+        </div>
+        {pendingContent.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {pendingContent.slice(0, 8).map((item) => {
+              const Icon = item.content_type === "reel" || item.content_type === "story" ? Film
+                : item.content_type === "post" || item.content_type === "ad" ? Camera
+                : FileText;
+              const thumb = item.file_urls?.[0];
+              const platCfg = item.platform ? PLATFORM_CONFIG[item.platform] : null;
+              return (
+                <a
+                  key={item.id}
+                  href={preview ? undefined : "/content"}
+                  onClick={preview ? (e) => e.preventDefault() : undefined}
+                  className={cn(
+                    "group text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden transition-all",
+                    preview ? "cursor-default" : "hover:border-zinc-600"
+                  )}
+                >
+                  <div className={cn(
+                    "relative aspect-[4/3] bg-[var(--surface-2)] flex items-center justify-center overflow-hidden",
+                    !thumb && platCfg ? `bg-gradient-to-br ${platCfg.bg}` : ""
+                  )}>
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt={item.title}
+                        className={cn("w-full h-full object-cover transition-transform duration-300", !preview && "group-hover:scale-105")}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
+                    ) : (
+                      <Icon className="w-7 h-7 text-[var(--foreground-subtle)] opacity-40" />
+                    )}
+                    <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-400 text-zinc-900">
+                      {STATUS_CONFIG.in_review?.label ?? "In Review"}
                     </div>
                   </div>
-                );
-              })}
+                  <div className="p-2.5 space-y-1.5">
+                    <p className="text-xs font-semibold text-[var(--foreground)] line-clamp-2 leading-tight">{item.title}</p>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className={cn("text-[10px] font-medium capitalize px-1.5 py-0.5 rounded border", TYPE_PILL[item.content_type] ?? TYPE_PILL.other)}>
+                        {item.content_type}
+                      </span>
+                      {item.platform && platCfg && (
+                        <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border", platCfg.pill)}>
+                          <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", platCfg.dot)} />
+                          {item.platform}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-[var(--border)] py-8 text-center">
+            <CheckCircle2 className="w-7 h-7 text-emerald-400 mx-auto mb-2" />
+            <p className="text-sm text-[var(--foreground-muted)]">No content awaiting review.</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Pending actions ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-400" />
+            Pending Actions
+          </CardTitle>
+        </CardHeader>
+        <div className="space-y-2">
+          {pendingForms.length === 0 && openTickets.length === 0 ? (
+            <div className="text-center py-6">
+              <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
+              <p className="text-sm text-[var(--foreground-muted)]">All caught up!</p>
+              <p className="text-xs text-[var(--foreground-subtle)]">No pending actions</p>
             </div>
           ) : (
-            <p className="text-sm text-[var(--foreground-subtle)]">No content yet.</p>
+            <>
+              {pendingForms.map((form) => (
+                <a
+                  key={form.id}
+                  href={preview ? undefined : "/forms"}
+                  onClick={preview ? (e) => e.preventDefault() : undefined}
+                  className={cn("flex items-center gap-3 p-2.5 rounded-lg transition-colors group", preview ? "cursor-default" : "hover:bg-[var(--surface-2)]")}
+                >
+                  <div className="w-7 h-7 rounded-lg bg-amber-400/10 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-3.5 h-3.5 text-amber-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[var(--foreground)] truncate">{form.title}</p>
+                    <p className="text-xs text-[var(--foreground-subtle)]">Form needs your response</p>
+                  </div>
+                  <Badge variant="warning">Pending</Badge>
+                </a>
+              ))}
+              {openTickets.map((t) => (
+                <a
+                  key={t.id}
+                  href={preview ? undefined : "/tickets"}
+                  onClick={preview ? (e) => e.preventDefault() : undefined}
+                  className={cn("flex items-center gap-3 p-2.5 rounded-lg transition-colors", preview ? "cursor-default" : "hover:bg-[var(--surface-2)]")}
+                >
+                  <div className="w-7 h-7 rounded-lg bg-orange-400/10 flex items-center justify-center flex-shrink-0">
+                    <Ticket className="w-3.5 h-3.5 text-orange-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[var(--foreground)] truncate">{t.title}</p>
+                    <p className="text-xs text-[var(--foreground-subtle)] capitalize">{t.priority} priority · open</p>
+                  </div>
+                </a>
+              ))}
+            </>
           )}
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-400" />
-              Pending Actions
-            </CardTitle>
-          </CardHeader>
-          <div className="space-y-2">
-            {pendingForms.length === 0 && openTickets.length === 0 ? (
-              <div className="text-center py-6">
-                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                <p className="text-sm text-[var(--foreground-muted)]">All caught up!</p>
-                <p className="text-xs text-[var(--foreground-subtle)]">No pending actions</p>
-              </div>
-            ) : (
-              <>
-                {pendingForms.map((form) => (
-                  <a
-                    key={form.id}
-                    href={preview ? undefined : "/forms"}
-                    onClick={preview ? (e) => e.preventDefault() : undefined}
-                    className={cn("flex items-center gap-3 p-2.5 rounded-lg transition-colors group", preview ? "cursor-default" : "hover:bg-[var(--surface-2)]")}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-amber-400/10 flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-3.5 h-3.5 text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--foreground)] truncate">{form.title}</p>
-                      <p className="text-xs text-[var(--foreground-subtle)]">Form needs your response</p>
-                    </div>
-                    <Badge variant="warning">Pending</Badge>
-                  </a>
-                ))}
-                {openTickets.map((t) => (
-                  <a
-                    key={t.id}
-                    href={preview ? undefined : "/tickets"}
-                    onClick={preview ? (e) => e.preventDefault() : undefined}
-                    className={cn("flex items-center gap-3 p-2.5 rounded-lg transition-colors", preview ? "cursor-default" : "hover:bg-[var(--surface-2)]")}
-                  >
-                    <div className="w-7 h-7 rounded-lg bg-orange-400/10 flex items-center justify-center flex-shrink-0">
-                      <Ticket className="w-3.5 h-3.5 text-orange-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--foreground)] truncate">{t.title}</p>
-                      <p className="text-xs text-[var(--foreground-subtle)] capitalize">{t.priority} priority · open</p>
-                    </div>
-                  </a>
-                ))}
-              </>
-            )}
-          </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       {/* ── Project detail modal ── */}
       {modalProject && (
