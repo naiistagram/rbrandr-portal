@@ -47,7 +47,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "", content_type: "post" as ContentItem["content_type"],
-    platform: "", description: "", scheduled_date: "",
+    platforms: [] as string[], description: "", scheduled_date: "",
   });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -62,9 +62,9 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
 
   const filtered = items.filter((item) => {
     const matchSearch = item.title.toLowerCase().includes(search.toLowerCase()) ||
-      (item.platform ?? "").toLowerCase().includes(search.toLowerCase());
+      item.platforms.some((p) => p.toLowerCase().includes(search.toLowerCase()));
     const matchStatus = statusFilter === "all" || item.status === statusFilter;
-    const matchPlatform = platformFilter === "all" || item.platform === platformFilter;
+    const matchPlatform = platformFilter === "all" || item.platforms.includes(platformFilter);
     return matchSearch && matchStatus && matchPlatform;
   });
 
@@ -79,15 +79,16 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
 
   const platformCounts: Record<string, number> = {};
   for (const p of PLATFORM_ORDER) {
-    platformCounts[p] = items.filter((i) => i.platform === p).length;
+    platformCounts[p] = items.filter((i) => i.platforms.includes(p)).length;
   }
 
+  // A multi-platform item appears once per platform section it's tagged with.
   const grouped: Record<string, ContentItem[]> = {};
   for (const p of PLATFORM_ORDER) {
-    const g = filtered.filter((i) => i.platform === p);
+    const g = filtered.filter((i) => i.platforms.includes(p));
     if (g.length) grouped[p] = g;
   }
-  const other = filtered.filter((i) => !i.platform || !PLATFORM_ORDER.includes(i.platform));
+  const other = filtered.filter((i) => i.platforms.length === 0 || i.platforms.every((p) => !PLATFORM_ORDER.includes(p)));
   if (other.length) grouped["Other"] = other;
 
   async function handleCreateContent(e: React.FormEvent) {
@@ -103,7 +104,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
         project_id: projectId,
         title: createForm.title,
         content_type: createForm.content_type,
-        platform: createForm.platform || null,
+        platforms: createForm.platforms,
         description: createForm.description || null,
         scheduled_date: createForm.scheduled_date || null,
       }),
@@ -118,7 +119,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
 
     if (json.content) setItems((prev) => [json.content, ...prev]);
     setShowCreate(false);
-    setCreateForm({ title: "", content_type: "post", platform: "", description: "", scheduled_date: "" });
+    setCreateForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "" });
     setCreating(false);
   }
 
@@ -172,7 +173,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
   function ContentCard({ item }: { item: ContentItem }) {
     const Icon = contentIcon(item.content_type);
     const thumb = item.file_urls?.[0];
-    const platCfg = item.platform ? PLATFORM_CONFIG[item.platform] : null;
+    const firstPlatCfg = item.platforms[0] ? PLATFORM_CONFIG[item.platforms[0]] : null;
 
     return (
       <button
@@ -181,7 +182,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
       >
         <div className={cn(
           "relative aspect-[4/3] bg-[var(--surface-2)] flex items-center justify-center overflow-hidden",
-          !thumb && platCfg ? `bg-gradient-to-br ${platCfg.bg}` : ""
+          !thumb && firstPlatCfg ? `bg-gradient-to-br ${firstPlatCfg.bg}` : ""
         )}>
           {thumb ? (
             <img
@@ -220,12 +221,15 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
             )}>
               {item.content_type}
             </span>
-            {item.platform && platCfg && (
-              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded border flex items-center gap-1", platCfg.pill)}>
-                <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", platCfg.dot)} />
-                {item.platform}
-              </span>
-            )}
+            {item.platforms.map((p) => {
+              const cfg = PLATFORM_CONFIG[p];
+              return (
+                <span key={p} className={cn("text-[10px] font-medium px-2 py-0.5 rounded border flex items-center gap-1", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
+                  {cfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />}
+                  {p}
+                </span>
+              );
+            })}
           </div>
           {item.scheduled_date && (
             <p className="text-[10px] text-[var(--foreground-subtle)]">{formatDate(item.scheduled_date)}</p>
@@ -395,28 +399,19 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Platform</label>
+                <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Platforms</label>
                 <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setCreateForm((f) => ({ ...f, platform: "" }))}
-                    className={cn(
-                      "px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
-                      !createForm.platform
-                        ? "bg-[var(--surface)] border-[var(--foreground-muted)] text-[var(--foreground)]"
-                        : "border-[var(--border)] text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]"
-                    )}
-                  >
-                    None
-                  </button>
                   {PLATFORMS.map((p) => {
                     const cfg = PLATFORM_CONFIG[p];
-                    const active = createForm.platform === p;
+                    const active = createForm.platforms.includes(p);
                     return (
                       <button
                         key={p}
                         type="button"
-                        onClick={() => setCreateForm((f) => ({ ...f, platform: p }))}
+                        onClick={() => setCreateForm((f) => ({
+                          ...f,
+                          platforms: active ? f.platforms.filter((x) => x !== p) : [...f.platforms, p],
+                        }))}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
                           active ? cfg.pill : "border-[var(--border)] text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]"
@@ -524,8 +519,8 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
               ) : (
                 <div className={cn(
                   "w-full h-full min-h-[220px] flex items-center justify-center",
-                  selected.platform && PLATFORM_CONFIG[selected.platform]
-                    ? `bg-gradient-to-br ${PLATFORM_CONFIG[selected.platform].bg}`
+                  selected.platforms[0] && PLATFORM_CONFIG[selected.platforms[0]]
+                    ? `bg-gradient-to-br ${PLATFORM_CONFIG[selected.platforms[0]].bg}`
                     : "bg-[var(--surface-2)]"
                 )}>
                   {(() => { const Icon = contentIcon(selected.content_type); return <Icon className="w-16 h-16 text-white/20" />; })()}
@@ -538,15 +533,15 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] flex-shrink-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {selected.platform ? (() => {
-                    const cfg = PLATFORM_CONFIG[selected.platform];
+                  {selected.platforms.length > 0 ? selected.platforms.map((p) => {
+                    const cfg = PLATFORM_CONFIG[p];
                     return (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-[var(--foreground-muted)]">
+                      <span key={p} className="flex items-center gap-1 text-xs font-semibold text-[var(--foreground-muted)]">
                         {cfg && <span className={cn("w-2 h-2 rounded-full", cfg.dot)} />}
-                        {selected.platform}
+                        {p}
                       </span>
                     );
-                  })() : (
+                  }) : (
                     <span className="text-xs font-semibold text-[var(--foreground-muted)]">No platform</span>
                   )}
                 </div>

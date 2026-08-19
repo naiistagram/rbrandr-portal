@@ -22,14 +22,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { action } = body;
 
   if (action === "add_content") {
-    const { project_id, title, content_type, platform, description, scheduled_date, status, file_urls, created_by } = body;
+    const { project_id, title, content_type, platforms, description, scheduled_date, status, file_urls, created_by } = body;
     if (!project_id || !title) return NextResponse.json({ error: "project_id and title required" }, { status: 400 });
 
     const { data, error } = await auth.admin.from("content_items").insert({
       project_id,
       title,
       content_type: content_type ?? "post",
-      platform: platform ?? null,
+      platforms: Array.isArray(platforms) ? platforms : [],
       description: description ?? null,
       scheduled_date: scheduled_date ?? null,
       status: status ?? "draft",

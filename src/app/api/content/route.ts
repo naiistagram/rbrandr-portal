@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { project_id, title, content_type, platform, description, scheduled_date } = body;
+  const { project_id, title, content_type, platforms, description, scheduled_date } = body;
 
   if (!project_id || !title) {
     return NextResponse.json({ error: "project_id and title required" }, { status: 400 });
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       project_id,
       title,
       content_type: content_type ?? "post",
-      platform: platform ?? null,
+      platforms: Array.isArray(platforms) ? platforms : [],
       description: description ?? null,
       scheduled_date: scheduled_date ?? null,
       status: "draft",
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
       subject: `New content submitted — ${data.title}`,
       html: buildEmailHtml({
         title: "New content submitted",
-        body: `<strong style="color:#fafafa;">${submitter?.full_name ?? "A client"}</strong> has submitted new content: <strong style="color:#fafafa;">"${data.title}"</strong>${data.platform ? ` on ${data.platform}` : ""}.`,
+        body: `<strong style="color:#fafafa;">${submitter?.full_name ?? "A client"}</strong> has submitted new content: <strong style="color:#fafafa;">"${data.title}"</strong>${data.platforms?.length ? ` on ${data.platforms.join(", ")}` : ""}.`,
         ctaText: "Review in admin",
         ctaUrl: `${appUrl}/admin/clients`,
       }),

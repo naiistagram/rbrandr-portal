@@ -165,7 +165,7 @@ export function AdminDashboardClient({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[var(--foreground)] truncate">{item.title}</p>
-                    <p className="text-xs text-[var(--foreground-subtle)]">{clientName} · {item.content_type}{item.platform ? ` · ${item.platform}` : ""}</p>
+                    <p className="text-xs text-[var(--foreground-subtle)]">{clientName} · {item.content_type}{item.platforms.length > 0 ? ` · ${item.platforms.join(", ")}` : ""}</p>
                   </div>
                   <p className="text-xs text-[var(--foreground-subtle)] flex-shrink-0">{formatDate(item.created_at)}</p>
                 </Link>
@@ -197,7 +197,7 @@ export function AdminDashboardClient({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-[var(--foreground)] truncate">{item.title}</p>
-                    <p className="text-xs text-[var(--foreground-subtle)]">{clientName}{item.platform ? ` · ${item.platform}` : ""}</p>
+                    <p className="text-xs text-[var(--foreground-subtle)]">{clientName}{item.platforms.length > 0 ? ` · ${item.platforms.join(", ")}` : ""}</p>
                   </div>
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${badge.cls}`}>{badge.label}</span>
                   <p className="text-xs text-[var(--foreground-subtle)] flex-shrink-0">{formatDate(item.updated_at)}</p>
@@ -233,7 +233,7 @@ export function AdminDashboardClient({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-[var(--foreground)] truncate">{item.title}</p>
-                      <p className="text-xs text-[var(--foreground-subtle)]">{clientName} · {item.platform ?? item.content_type}</p>
+                      <p className="text-xs text-[var(--foreground-subtle)]">{clientName} · {item.platforms.length > 0 ? item.platforms.join(", ") : item.content_type}</p>
                     </div>
                     <p className="text-xs text-[var(--foreground-subtle)] flex-shrink-0">{formatDate(item.updated_at)}</p>
                   </Link>

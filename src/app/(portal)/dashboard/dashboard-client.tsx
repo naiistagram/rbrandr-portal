@@ -198,7 +198,7 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
                 : item.content_type === "post" || item.content_type === "ad" ? Camera
                 : FileText;
               const thumb = item.file_urls?.[0];
-              const platCfg = item.platform ? PLATFORM_CONFIG[item.platform] : null;
+              const platCfg = item.platforms[0] ? PLATFORM_CONFIG[item.platforms[0]] : null;
               return (
                 <a
                   key={item.id}
@@ -233,11 +233,17 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
                       <span className={cn("text-[10px] font-medium capitalize px-1.5 py-0.5 rounded border", TYPE_PILL[item.content_type] ?? TYPE_PILL.other)}>
                         {item.content_type}
                       </span>
-                      {item.platform && platCfg && (
-                        <span className={cn("inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border", platCfg.pill)}>
-                          <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", platCfg.dot)} />
-                          {item.platform}
-                        </span>
+                      {item.platforms.slice(0, 2).map((p) => {
+                        const cfg = PLATFORM_CONFIG[p];
+                        return (
+                          <span key={p} className={cn("inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
+                            {cfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />}
+                            {p}
+                          </span>
+                        );
+                      })}
+                      {item.platforms.length > 2 && (
+                        <span className="text-[10px] font-medium text-[var(--foreground-subtle)] px-1">+{item.platforms.length - 2}</span>
                       )}
                     </div>
                   </div>
