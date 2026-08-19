@@ -61,9 +61,12 @@ interface Props {
   pendingForms: Form[];
   pendingContracts: { id: string; title: string; status: string }[];
   openTickets: { id: string; title: string; status: string; priority: string }[];
+  /** Read-only admin preview: the linked pages (tickets/content/etc.) don't
+   * exist in an admin-viewable, client-scoped form, so nav links are disabled. */
+  preview?: boolean;
 }
 
-export function DashboardClient({ projects, allContent, pendingForms, pendingContracts, openTickets }: Props) {
+export function DashboardClient({ projects, allContent, pendingForms, pendingContracts, openTickets, preview = false }: Props) {
   const [modalProject, setModalProject] = useState<Project | null>(null);
 
   const recentContent = allContent.slice(0, 5);
@@ -129,7 +132,7 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
             <p className="text-xs text-[var(--foreground-subtle)]">Awaiting Review</p>
           </div>
           <p className="text-2xl font-bold text-[var(--foreground)]">{contentInReview}</p>
-          {contentInReview > 0 && <a href="/content" className="text-[10px] text-amber-400 hover:underline mt-0.5 block">Review now →</a>}
+          {contentInReview > 0 && !preview && <a href="/content" className="text-[10px] text-amber-400 hover:underline mt-0.5 block">Review now →</a>}
         </Card>
         <Card className="py-3 px-4">
           <div className="flex items-center gap-2 mb-2">
@@ -159,7 +162,15 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
       {pendingContracts.length > 0 && (
         <div className="space-y-2">
           {pendingContracts.map((c) => (
-            <a key={c.id} href="/contracts" className="flex items-center gap-3 p-3.5 rounded-xl bg-[var(--surface)] border border-amber-400/20 hover:border-amber-400/40 transition-colors">
+            <a
+              key={c.id}
+              href={preview ? undefined : "/contracts"}
+              onClick={preview ? (e) => e.preventDefault() : undefined}
+              className={cn(
+                "flex items-center gap-3 p-3.5 rounded-xl bg-[var(--surface)] border border-amber-400/20 transition-colors",
+                preview ? "cursor-default" : "hover:border-amber-400/40"
+              )}
+            >
               <div className="w-7 h-7 rounded-lg bg-amber-400/10 flex items-center justify-center flex-shrink-0">
                 <ScrollText className="w-3.5 h-3.5 text-amber-400" />
               </div>
@@ -181,7 +192,7 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
               <CalendarDays className="w-4 h-4 text-[var(--accent)]" />
               Recent Content
             </CardTitle>
-            <a href="/content" className="text-xs text-[var(--accent)] hover:underline">View all</a>
+            {!preview && <a href="/content" className="text-xs text-[var(--accent)] hover:underline">View all</a>}
           </CardHeader>
           {recentContent.length > 0 ? (
             <div className="space-y-2">
@@ -225,7 +236,12 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
             ) : (
               <>
                 {pendingForms.map((form) => (
-                  <a key={form.id} href="/forms" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--surface-2)] transition-colors group">
+                  <a
+                    key={form.id}
+                    href={preview ? undefined : "/forms"}
+                    onClick={preview ? (e) => e.preventDefault() : undefined}
+                    className={cn("flex items-center gap-3 p-2.5 rounded-lg transition-colors group", preview ? "cursor-default" : "hover:bg-[var(--surface-2)]")}
+                  >
                     <div className="w-7 h-7 rounded-lg bg-amber-400/10 flex items-center justify-center flex-shrink-0">
                       <FileText className="w-3.5 h-3.5 text-amber-400" />
                     </div>
@@ -237,7 +253,12 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
                   </a>
                 ))}
                 {openTickets.map((t) => (
-                  <a key={t.id} href="/tickets" className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[var(--surface-2)] transition-colors">
+                  <a
+                    key={t.id}
+                    href={preview ? undefined : "/tickets"}
+                    onClick={preview ? (e) => e.preventDefault() : undefined}
+                    className={cn("flex items-center gap-3 p-2.5 rounded-lg transition-colors", preview ? "cursor-default" : "hover:bg-[var(--surface-2)]")}
+                  >
                     <div className="w-7 h-7 rounded-lg bg-orange-400/10 flex items-center justify-center flex-shrink-0">
                       <Ticket className="w-3.5 h-3.5 text-orange-400" />
                     </div>
