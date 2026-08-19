@@ -50,7 +50,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   if (action === "update_content") {
-    const { content_id, description, file_urls, status, scheduled_date } = body;
+    const { content_id, description, file_urls, status, scheduled_date, platforms } = body;
     if (!content_id) return NextResponse.json({ error: "content_id required" }, { status: 400 });
 
     const updates: Record<string, unknown> = {};
@@ -58,6 +58,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (file_urls !== undefined) updates.file_urls = file_urls;
     if (status !== undefined) updates.status = status;
     if (scheduled_date !== undefined) updates.scheduled_date = scheduled_date;
+    if (platforms !== undefined) updates.platforms = Array.isArray(platforms) ? platforms : [];
 
     const { data, error } = await auth.admin
       .from("content_items")

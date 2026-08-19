@@ -87,6 +87,7 @@ export default function ClientDetailPage() {
   const [adminMediaIndex, setAdminMediaIndex] = useState(0);
   const [adminEditDesc, setAdminEditDesc] = useState("");
   const [adminEditFileUrls, setAdminEditFileUrls] = useState<string[]>([]);
+  const [adminEditPlatforms, setAdminEditPlatforms] = useState<string[]>([]);
   const [uploadingEditFile, setUploadingEditFile] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const adminEditFileRef = useRef<HTMLInputElement>(null);
@@ -832,6 +833,7 @@ export default function ClientDetailPage() {
     setAdminMediaIndex(0);
     setAdminEditDesc(item.description ?? "");
     setAdminEditFileUrls(item.file_urls ?? []);
+    setAdminEditPlatforms(item.platforms);
   }
 
   async function handleEditFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -865,6 +867,7 @@ export default function ClientDetailPage() {
         content_id: adminSelected.id,
         description: adminEditDesc || null,
         file_urls: adminEditFileUrls.length > 0 ? adminEditFileUrls : null,
+        platforms: adminEditPlatforms,
       }),
     });
     const json = await res.json();
@@ -1852,6 +1855,31 @@ export default function ClientDetailPage() {
                         }}
                         className={inputClass}
                       />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-[var(--foreground-muted)] block">Platforms</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {PLATFORMS.map((p) => {
+                          const cfg = PLATFORM_CONFIG[p];
+                          const active = adminEditPlatforms.includes(p);
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              onClick={() => setAdminEditPlatforms((prev) =>
+                                active ? prev.filter((x) => x !== p) : [...prev, p]
+                              )}
+                              className={cn(
+                                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all cursor-pointer",
+                                active ? cfg.pill : "border-[var(--border)] text-[var(--foreground-subtle)] hover:text-[var(--foreground-muted)]"
+                              )}
+                            >
+                              <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />
+                              {p}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-[var(--foreground-muted)] block">Caption / Notes</label>
