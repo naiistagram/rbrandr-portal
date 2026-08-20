@@ -825,12 +825,14 @@ export default function ClientDetailPage() {
   }
 
   async function handleUpdateContentDate(itemId: string, newDate: string) {
-    await supabase.from("content_items").update({ scheduled_date: newDate || null }).eq("id", itemId);
+    const { error } = await supabase.from("content_items").update({ scheduled_date: newDate || null }).eq("id", itemId);
+    if (error) { alert(`Failed to save date: ${error.message}`); return; }
     setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_date: newDate || null } : c));
   }
 
   async function handleUpdateContentTime(itemId: string, newTime: string) {
-    await supabase.from("content_items").update({ scheduled_time: newTime || null }).eq("id", itemId);
+    const { error } = await supabase.from("content_items").update({ scheduled_time: newTime || null }).eq("id", itemId);
+    if (error) { alert(`Failed to save time: ${error.message}`); return; }
     setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_time: newTime || null } : c));
   }
 
