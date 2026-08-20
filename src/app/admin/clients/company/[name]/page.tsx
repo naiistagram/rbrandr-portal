@@ -208,7 +208,7 @@ export default async function CompanyPage({
       </div>
 
       {/* Tabs */}
-      <div className="flex overflow-x-auto border-b border-[var(--border)] flex-shrink-0 px-2" style={{ background: "#111113" }}>
+      <div className="flex overflow-x-auto border-b border-[var(--border)] bg-[var(--surface)] flex-shrink-0 px-2">
         {TABS.map((t) => (
           <Link
             key={t}

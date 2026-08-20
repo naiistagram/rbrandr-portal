@@ -957,24 +957,17 @@ export default function ClientDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ background: "#111113", borderBottom: "1px solid #27272a", display: "flex", overflowX: "auto", padding: "0 8px", flexShrink: 0 }}>
+      <div className="bg-[var(--surface)] border-b border-[var(--border)] flex overflow-x-auto px-2 flex-shrink-0">
         {getVisibleTabs(clientServiceType ?? "social_media").map((t) => (
           <button
             key={t}
             onClick={() => changeTab(t)}
-            style={{
-              padding: "12px 16px",
-              fontSize: "14px",
-              fontWeight: 500,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-              cursor: "pointer",
-              background: "none",
-              border: "none",
-              borderBottom: tab === t ? "2px solid #ed0194" : "2px solid transparent",
-              color: tab === t ? "#ed0194" : "#a1a1aa",
-              transition: "color 0.15s",
-            }}
+            className={cn(
+              "px-4 py-3 text-sm font-medium whitespace-nowrap flex-shrink-0 cursor-pointer bg-transparent border-0 border-b-2 transition-colors",
+              tab === t
+                ? "border-[var(--accent)] text-[var(--accent)]"
+                : "border-transparent text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
+            )}
           >
             {t}
           </button>
@@ -1255,8 +1248,8 @@ export default function ClientDetailPage() {
 
             {/* Brief Preview */}
             {project && (projForm.goals || projForm.target_audience || projForm.messaging || projForm.channels || projForm.competition || projForm.kpis.length > 0 || milestones.length > 0) && (
-              <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-zinc-800 flex items-center gap-2">
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-[var(--border)] flex items-center gap-2">
                   <Eye className="w-4 h-4 text-[var(--accent)]" />
                   <h3 className="text-sm font-semibold text-[var(--foreground)]">Project Brief Preview</h3>
                   <span className="text-xs text-[var(--foreground-subtle)] ml-auto">
@@ -1732,11 +1725,11 @@ export default function ClientDetailPage() {
                                 <div className="p-3 space-y-2">
                                   <p className="text-sm font-semibold text-[var(--foreground)] line-clamp-2 leading-tight">{item.title}</p>
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className={cn("text-[10px] font-medium capitalize px-2 py-0.5 rounded border", TYPE_PILL[item.content_type] ?? TYPE_PILL.other)}>{item.content_type}</span>
+                                    <span className={cn("text-[10px] font-semibold capitalize px-2 py-0.5 rounded border", TYPE_PILL[item.content_type] ?? TYPE_PILL.other)}>{item.content_type}</span>
                                     {item.platforms.map((p) => {
                                       const cfg = PLATFORM_CONFIG[p];
                                       return (
-                                        <span key={p} className={cn("text-[10px] font-medium px-2 py-0.5 rounded border flex items-center gap-1", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
+                                        <span key={p} className={cn("text-[10px] font-semibold px-2 py-0.5 rounded border flex items-center gap-1", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
                                           {cfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />}
                                           {p}
                                         </span>
@@ -1824,7 +1817,7 @@ export default function ClientDetailPage() {
                     <div className="flex items-center gap-2">
                       <StatusDot status={adminSelected.status} />
                       <span className={cn("text-xs font-semibold", s?.color)}>{s?.label}</span>
-                      <span className={cn("text-[10px] font-medium capitalize px-2 py-0.5 rounded border ml-auto", TYPE_PILL[adminSelected.content_type] ?? TYPE_PILL.other)}>{adminSelected.content_type}</span>
+                      <span className={cn("text-[10px] font-semibold capitalize px-2 py-0.5 rounded border ml-auto", TYPE_PILL[adminSelected.content_type] ?? TYPE_PILL.other)}>{adminSelected.content_type}</span>
                     </div>
                     <h4 className="text-base font-bold text-[var(--foreground)] leading-tight">{adminSelected.title}</h4>
                     <div className="space-y-1.5">

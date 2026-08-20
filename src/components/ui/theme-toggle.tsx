@@ -4,10 +4,32 @@ import { Sun, Moon } from "lucide-react";
 import { useTheme } from "@/lib/use-theme";
 import { cn } from "@/lib/utils";
 
-/** Compact light/dark switch — drop into a sidebar's bottom section. */
-export function ThemeToggle({ className }: { className?: string }) {
+interface ThemeToggleProps {
+  className?: string;
+  /** "row" (icon + label, for a sidebar list) or "icon" (compact circular button, for a topbar). */
+  variant?: "row" | "icon";
+}
+
+/** Light/dark switch. Defaults to a labeled row for a sidebar's bottom section. */
+export function ThemeToggle({ className, variant = "row" }: ThemeToggleProps) {
   const { theme, toggle } = useTheme();
   const isLight = theme === "light";
+
+  if (variant === "icon") {
+    return (
+      <button
+        onClick={toggle}
+        title={isLight ? "Switch to dark mode" : "Switch to light mode"}
+        aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
+        className={cn(
+          "w-9 h-9 rounded-lg hover:bg-[var(--surface)] flex items-center justify-center text-[var(--foreground-muted)] hover:text-[var(--foreground)] transition-all duration-150 cursor-pointer",
+          className
+        )}
+      >
+        {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+      </button>
+    );
+  }
 
   return (
     <button
