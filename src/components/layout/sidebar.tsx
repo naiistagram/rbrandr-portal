@@ -25,6 +25,7 @@ import {
 import { cn, getInitials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const SOCIAL_MEDIA_NAV = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -215,6 +216,7 @@ export function Sidebar({ user, serviceType, clientRole = "ceo", notificationCou
 
       {/* Bottom */}
       <div className="border-t border-[var(--border)] p-3 space-y-1">
+        <ThemeToggle />
         <Link
           href="/settings"
           className={cn(

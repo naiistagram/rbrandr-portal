@@ -216,7 +216,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
           <p className="text-sm font-semibold text-[var(--foreground)] line-clamp-2 leading-tight">{item.title}</p>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className={cn(
-              "text-[10px] font-medium capitalize px-2 py-0.5 rounded border",
+              "text-[10px] font-semibold capitalize px-2 py-0.5 rounded border",
               TYPE_PILL[item.content_type] ?? TYPE_PILL.other
             )}>
               {item.content_type}
@@ -224,7 +224,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
             {item.platforms.map((p) => {
               const cfg = PLATFORM_CONFIG[p];
               return (
-                <span key={p} className={cn("text-[10px] font-medium px-2 py-0.5 rounded border flex items-center gap-1", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
+                <span key={p} className={cn("text-[10px] font-semibold px-2 py-0.5 rounded border flex items-center gap-1", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
                   {cfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />}
                   {p}
                 </span>
@@ -561,7 +561,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
                     {STATUS_CONFIG[selected.status as keyof typeof STATUS_CONFIG]?.label}
                   </span>
                   <span className={cn(
-                    "text-[10px] font-medium capitalize px-2 py-0.5 rounded border ml-auto",
+                    "text-[10px] font-semibold capitalize px-2 py-0.5 rounded border ml-auto",
                     TYPE_PILL[selected.content_type] ?? TYPE_PILL.other
                   )}>
                     {selected.content_type}

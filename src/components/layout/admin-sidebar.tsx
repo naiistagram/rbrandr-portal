@@ -8,6 +8,7 @@ import { LayoutDashboard, Users, Settings, LogOut, ChevronRight, Shield, Menu, X
 import { cn, getInitials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/admin/dashboard", icon: LayoutDashboard },
@@ -129,6 +130,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
 
       {/* Bottom */}
       <div className="border-t border-[var(--border)] p-3 space-y-1">
+        <ThemeToggle />
         <Link
           href="/admin/settings"
           className={cn(

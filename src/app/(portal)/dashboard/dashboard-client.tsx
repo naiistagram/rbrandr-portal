@@ -230,13 +230,13 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
                   <div className="p-2.5 space-y-1.5">
                     <p className="text-xs font-semibold text-[var(--foreground)] line-clamp-2 leading-tight">{item.title}</p>
                     <div className="flex items-center gap-1 flex-wrap">
-                      <span className={cn("text-[10px] font-medium capitalize px-1.5 py-0.5 rounded border", TYPE_PILL[item.content_type] ?? TYPE_PILL.other)}>
+                      <span className={cn("text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded border", TYPE_PILL[item.content_type] ?? TYPE_PILL.other)}>
                         {item.content_type}
                       </span>
                       {item.platforms.slice(0, 2).map((p) => {
                         const cfg = PLATFORM_CONFIG[p];
                         return (
-                          <span key={p} className={cn("inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
+                          <span key={p} className={cn("inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border", cfg?.pill ?? "bg-zinc-500/10 text-zinc-400 border-zinc-500/20")}>
                             {cfg && <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", cfg.dot)} />}
                             {p}
                           </span>

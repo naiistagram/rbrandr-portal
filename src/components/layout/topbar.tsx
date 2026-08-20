@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import type { Notification } from "@/lib/supabase/types";
 import { CommandPalette } from "@/components/ui/command-palette";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface TopbarProps {
   title: string;
@@ -91,6 +92,9 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
       <div className="flex items-center gap-2 lg:gap-3 flex-shrink-0">
         {/* Search trigger */}
         <CommandPalette />
+
+        {/* Theme toggle */}
+        <ThemeToggle variant="icon" />
 
         {/* Notification bell */}
         <div className="relative">
