@@ -14,7 +14,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge, StatusDot } from "@/components/ui/badge";
-import { cn, formatDate, STATUS_CONFIG } from "@/lib/utils";
+import { cn, formatDate, formatTime, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL, PLATFORM_ORDER } from "@/lib/content-display";
 import type {
   Profile, Project, ContentItem, Contract, Report,
@@ -135,7 +135,7 @@ export default function ClientDetailPage() {
   const [showContentForm, setShowContentForm] = useState(false);
   const [contentForm, setContentForm] = useState({
     title: "", content_type: "post" as ContentItem["content_type"], platforms: [] as string[],
-    description: "", scheduled_date: "", status: "draft" as ContentItem["status"],
+    description: "", scheduled_date: "", scheduled_time: "", status: "draft" as ContentItem["status"],
   });
   const [addingContent, setAddingContent] = useState(false);
   const contentFileRef = useRef<HTMLInputElement>(null);
@@ -462,6 +462,7 @@ export default function ClientDetailPage() {
         platforms: contentForm.platforms,
         description: contentForm.description || null,
         scheduled_date: contentForm.scheduled_date || null,
+        scheduled_time: contentForm.scheduled_time || null,
         status: contentForm.status,
         created_by: adminId,
         file_urls: contentFileUrls.length > 0 ? contentFileUrls : null,
@@ -472,7 +473,7 @@ export default function ClientDetailPage() {
     if (!res.ok) { alert(`Failed to add content: ${json.error}`); setAddingContent(false); return; }
     if (json.content) setContent((prev) => [json.content, ...prev]);
     setShowContentForm(false);
-    setContentForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", status: "draft" });
+    setContentForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "", status: "draft" });
     setContentFileUrls([]);
     setAddingContent(false);
   }
@@ -826,6 +827,11 @@ export default function ClientDetailPage() {
   async function handleUpdateContentDate(itemId: string, newDate: string) {
     await supabase.from("content_items").update({ scheduled_date: newDate || null }).eq("id", itemId);
     setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_date: newDate || null } : c));
+  }
+
+  async function handleUpdateContentTime(itemId: string, newTime: string) {
+    await supabase.from("content_items").update({ scheduled_time: newTime || null }).eq("id", itemId);
+    setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_time: newTime || null } : c));
   }
 
   function openAdminDetail(item: ContentItem) {
@@ -1603,10 +1609,14 @@ export default function ClientDetailPage() {
                       })}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className={labelClass}>Scheduled Date</label>
                       <input type="date" value={contentForm.scheduled_date} onChange={(e) => setContentForm((f) => ({ ...f, scheduled_date: e.target.value }))} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Time</label>
+                      <input type="time" value={contentForm.scheduled_time} onChange={(e) => setContentForm((f) => ({ ...f, scheduled_time: e.target.value }))} className={inputClass} />
                     </div>
                     <div>
                       <label className={labelClass}>Status</label>
@@ -1739,7 +1749,11 @@ export default function ClientDetailPage() {
                                   {(item as { profiles?: { full_name: string } | null }).profiles?.full_name && (
                                     <p className="text-[10px] text-[var(--foreground-subtle)]">by {(item as { profiles?: { full_name: string } | null }).profiles!.full_name}</p>
                                   )}
-                                  {item.scheduled_date && <p className="text-[10px] text-[var(--foreground-subtle)]">{formatDate(item.scheduled_date)}</p>}
+                                  {item.scheduled_date && (
+                                    <p className="text-[10px] text-[var(--foreground-subtle)]">
+                                      {formatDate(item.scheduled_date)}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}
+                                    </p>
+                                  )}
                                 </div>
                               </button>
                             );
@@ -1760,7 +1774,7 @@ export default function ClientDetailPage() {
           const s = STATUS_CONFIG[adminSelected.status as keyof typeof STATUS_CONFIG];
           return (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAdminSelected(null)}>
-              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col md:flex-row overflow-hidden animate-fade-in" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row overflow-hidden animate-fade-in" onClick={(e) => e.stopPropagation()}>
                 {/* Media */}
                 <div className="relative bg-black flex items-center justify-center md:w-[55%] flex-shrink-0 min-h-[220px]">
                   {media.length > 0 ? (
@@ -1837,17 +1851,31 @@ export default function ClientDetailPage() {
                         <option value="published">Published</option>
                       </select>
                     </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-[var(--foreground-muted)] block">Scheduled Date</label>
-                      <input
-                        type="date"
-                        value={adminSelected.scheduled_date ?? ""}
-                        onChange={(e) => {
-                          handleUpdateContentDate(adminSelected.id, e.target.value);
-                          setAdminSelected((p) => p ? { ...p, scheduled_date: e.target.value || null } : null);
-                        }}
-                        className={inputClass}
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-[var(--foreground-muted)] block">Scheduled Date</label>
+                        <input
+                          type="date"
+                          value={adminSelected.scheduled_date ?? ""}
+                          onChange={(e) => {
+                            handleUpdateContentDate(adminSelected.id, e.target.value);
+                            setAdminSelected((p) => p ? { ...p, scheduled_date: e.target.value || null } : null);
+                          }}
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-[var(--foreground-muted)] block">Time</label>
+                        <input
+                          type="time"
+                          value={adminSelected.scheduled_time ?? ""}
+                          onChange={(e) => {
+                            handleUpdateContentTime(adminSelected.id, e.target.value);
+                            setAdminSelected((p) => p ? { ...p, scheduled_time: e.target.value || null } : null);
+                          }}
+                          className={inputClass}
+                        />
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-[var(--foreground-muted)] block">Platforms</label>

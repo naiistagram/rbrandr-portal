@@ -22,7 +22,7 @@ import { Badge, StatusDot } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Topbar } from "@/components/layout/topbar";
-import { cn, STATUS_CONFIG, formatDate } from "@/lib/utils";
+import { cn, STATUS_CONFIG, formatDate, formatTime } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL, PLATFORM_ORDER } from "@/lib/content-display";
 import type { ContentItem } from "@/lib/supabase/types";
 
@@ -47,7 +47,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
     title: "", content_type: "post" as ContentItem["content_type"],
-    platforms: [] as string[], description: "", scheduled_date: "",
+    platforms: [] as string[], description: "", scheduled_date: "", scheduled_time: "",
   });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -107,6 +107,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
         platforms: createForm.platforms,
         description: createForm.description || null,
         scheduled_date: createForm.scheduled_date || null,
+        scheduled_time: createForm.scheduled_time || null,
       }),
     });
 
@@ -119,7 +120,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
 
     if (json.content) setItems((prev) => [json.content, ...prev]);
     setShowCreate(false);
-    setCreateForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "" });
+    setCreateForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "" });
     setCreating(false);
   }
 
@@ -232,7 +233,9 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
             })}
           </div>
           {item.scheduled_date && (
-            <p className="text-[10px] text-[var(--foreground-subtle)]">{formatDate(item.scheduled_date)}</p>
+            <p className="text-[10px] text-[var(--foreground-subtle)]">
+              {formatDate(item.scheduled_date)}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}
+            </p>
           )}
         </div>
       </button>
@@ -424,9 +427,15 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
                   })}
                 </div>
               </div>
-              <div>
-                <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Scheduled Date *</label>
-                <input type="date" required value={createForm.scheduled_date} onChange={(e) => setCreateForm((f) => ({ ...f, scheduled_date: e.target.value }))} className={inputClass} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Scheduled Date *</label>
+                  <input type="date" required value={createForm.scheduled_date} onChange={(e) => setCreateForm((f) => ({ ...f, scheduled_date: e.target.value }))} className={inputClass} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Time</label>
+                  <input type="time" value={createForm.scheduled_time} onChange={(e) => setCreateForm((f) => ({ ...f, scheduled_time: e.target.value }))} className={inputClass} />
+                </div>
               </div>
               <div>
                 <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Notes</label>
@@ -573,7 +582,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
                   <h4 className="text-base font-bold text-[var(--foreground)] leading-tight">{selected.title}</h4>
                   {selected.scheduled_date && (
                     <p className="text-xs text-[var(--foreground-subtle)] mt-1">
-                      Scheduled: {formatDate(selected.scheduled_date)}
+                      Scheduled: {formatDate(selected.scheduled_date)}{selected.scheduled_time ? ` at ${formatTime(selected.scheduled_time)}` : ""}
                     </p>
                   )}
                 </div>
