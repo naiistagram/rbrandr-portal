@@ -23,6 +23,15 @@ export function formatDateTime(date: string | Date) {
   });
 }
 
+/** Formats a "HH:MM" 24-hour string (content_items.scheduled_time) as "2:30 PM". */
+export function formatTime(time: string) {
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return time;
+  const period = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 export function getInitials(name: string) {
   return name
     .split(" ")

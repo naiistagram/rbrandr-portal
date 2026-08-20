@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { project_id, title, content_type, platforms, description, scheduled_date } = body;
+  const { project_id, title, content_type, platforms, description, scheduled_date, scheduled_time } = body;
 
   if (!project_id || !title) {
     return NextResponse.json({ error: "project_id and title required" }, { status: 400 });
@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
       platforms: Array.isArray(platforms) ? platforms : [],
       description: description ?? null,
       scheduled_date: scheduled_date ?? null,
+      scheduled_time: scheduled_time ?? null,
       status: "draft",
       created_by: user.id,
     })

@@ -36,7 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, StatusDot } from "@/components/ui/badge";
 import { Topbar } from "@/components/layout/topbar";
 import { FileViewer } from "@/components/ui/file-viewer";
-import { cn, STATUS_CONFIG, formatDate } from "@/lib/utils";
+import { cn, STATUS_CONFIG, formatDate, formatTime } from "@/lib/utils";
 import { PLATFORM_CONFIG } from "@/lib/content-display";
 import type { ContentItem } from "@/lib/supabase/types";
 
@@ -52,6 +52,7 @@ type NewContentForm = {
   platforms: string[];
   description: string;
   scheduled_date: string;
+  scheduled_time: string;
 };
 
 const statusColors: Record<ContentStatus, string> = {
@@ -74,7 +75,7 @@ export default function CalendarPage() {
   const [view, setView] = useState<CalView>("month");
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<NewContentForm>({
-    title: "", content_type: "post", platforms: [], description: "", scheduled_date: "",
+    title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "",
   });
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -134,6 +135,7 @@ export default function CalendarPage() {
         platforms: createForm.platforms,
         description: createForm.description || null,
         scheduled_date: createForm.scheduled_date || null,
+        scheduled_time: createForm.scheduled_time || null,
       }),
     });
 
@@ -146,7 +148,7 @@ export default function CalendarPage() {
 
     if (json.content) setItems((prev) => [...prev, json.content]);
     setShowCreate(false);
-    setCreateForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "" });
+    setCreateForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "" });
     setCreating(false);
   }
 
@@ -225,7 +227,7 @@ export default function CalendarPage() {
           <h4 className="text-base font-bold text-[var(--foreground)]">{selected.title}</h4>
           {selected.scheduled_date && (
             <p className="text-xs text-[var(--foreground-subtle)] mt-1">
-              Scheduled: {format(parseISO(selected.scheduled_date), "d MMM yyyy")}
+              Scheduled: {format(parseISO(selected.scheduled_date), "d MMM yyyy")}{selected.scheduled_time ? ` at ${formatTime(selected.scheduled_time)}` : ""}
             </p>
           )}
         </div>
@@ -559,7 +561,9 @@ export default function CalendarPage() {
                         </div>
                       </div>
                       {item.scheduled_date && (
-                        <p className="text-xs text-[var(--foreground-subtle)] flex-shrink-0">{formatDate(item.scheduled_date)}</p>
+                        <p className="text-xs text-[var(--foreground-subtle)] flex-shrink-0">
+                          {formatDate(item.scheduled_date)}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}
+                        </p>
                       )}
                       {(item.file_urls?.length ?? 0) > 0 && (
                         <Paperclip className="w-3.5 h-3.5 text-[var(--foreground-subtle)] flex-shrink-0" />
@@ -697,9 +701,15 @@ export default function CalendarPage() {
                     })}
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Scheduled Date *</label>
-                  <input type="date" required value={createForm.scheduled_date} onChange={(e) => setCreateForm((f) => ({ ...f, scheduled_date: e.target.value }))} className={inputClass} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Scheduled Date *</label>
+                    <input type="date" required value={createForm.scheduled_date} onChange={(e) => setCreateForm((f) => ({ ...f, scheduled_date: e.target.value }))} className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Time</label>
+                    <input type="time" value={createForm.scheduled_time} onChange={(e) => setCreateForm((f) => ({ ...f, scheduled_time: e.target.value }))} className={inputClass} />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-[var(--foreground-muted)] block mb-1.5">Notes</label>

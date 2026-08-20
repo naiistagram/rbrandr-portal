@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { action } = body;
 
   if (action === "add_content") {
-    const { project_id, title, content_type, platforms, description, scheduled_date, status, file_urls, created_by } = body;
+    const { project_id, title, content_type, platforms, description, scheduled_date, scheduled_time, status, file_urls, created_by } = body;
     if (!project_id || !title) return NextResponse.json({ error: "project_id and title required" }, { status: 400 });
 
     const { data, error } = await auth.admin.from("content_items").insert({
@@ -32,6 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       platforms: Array.isArray(platforms) ? platforms : [],
       description: description ?? null,
       scheduled_date: scheduled_date ?? null,
+      scheduled_time: scheduled_time ?? null,
       status: status ?? "draft",
       file_urls: file_urls ?? null,
       created_by: created_by ?? null,
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   if (action === "update_content") {
-    const { content_id, description, file_urls, status, scheduled_date, platforms } = body;
+    const { content_id, description, file_urls, status, scheduled_date, scheduled_time, platforms } = body;
     if (!content_id) return NextResponse.json({ error: "content_id required" }, { status: 400 });
 
     const updates: Record<string, unknown> = {};
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (file_urls !== undefined) updates.file_urls = file_urls;
     if (status !== undefined) updates.status = status;
     if (scheduled_date !== undefined) updates.scheduled_date = scheduled_date;
+    if (scheduled_time !== undefined) updates.scheduled_time = scheduled_time;
     if (platforms !== undefined) updates.platforms = Array.isArray(platforms) ? platforms : [];
 
     const { data, error } = await auth.admin
