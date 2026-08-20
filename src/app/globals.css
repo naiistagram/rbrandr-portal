@@ -16,6 +16,22 @@
   --accent-pink-light: #cd55c4;
 }
 
+:root[data-theme="light"] {
+  --background: #ffffff;
+  --surface: #f7f7f8;
+  --surface-2: #eeeef0;
+  --border: #e4e4e7;
+  --border-subtle: #ececef;
+  --foreground: #18181b;
+  --foreground-muted: #52525b;
+  --foreground-subtle: #a1a1aa;
+  --accent: #ed0194;
+  --accent-hover: #d4017f;
+  --accent-subtle: rgba(237, 1, 148, 0.08);
+  --accent-purple: #b400a7;
+  --accent-pink-light: #cd55c4;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -37,6 +53,10 @@
 
 html {
   color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
 }
 
 body {
