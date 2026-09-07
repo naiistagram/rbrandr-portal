@@ -9,7 +9,7 @@ import {
   Ticket as TicketIcon, CheckCircle2, Circle, Calendar, Trash2,
   AlignLeft, CheckSquare, List,
   Target, Megaphone, Radio, TrendingUp, Users, Trophy, Eye,
-  Film, Camera, ChevronLeft, ChevronRight, Paperclip, Globe, MessageSquare, Star, Building2,
+  Film, Camera, ChevronLeft, ChevronRight, Paperclip, Globe, MessageSquare, Star, Building2, Send,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -116,6 +116,16 @@ export default function ClientDetailPage() {
   const [memberResetSent, setMemberResetSent] = useState<Record<string, boolean>>({});
   const [companies, setCompanies] = useState<string[]>([]);
   const [memberCompanyEditing, setMemberCompanyEditing] = useState<string | null>(null);
+  type SocialConnection = { id: string; provider: "meta" | "linkedin"; platform: "Facebook" | "Instagram" | "LinkedIn"; account_id: string; account_name: string; token_expires_at: string | null };
+  const [socialConnections, setSocialConnections] = useState<SocialConnection[]>([]);
+  const [socialLoading, setSocialLoading] = useState(false);
+  const [publishingContent, setPublishingContent] = useState(false);
+  const [publishMessage, setPublishMessage] = useState("");
+  type SocialCandidate = { id: string; platform: "Facebook" | "Instagram"; accountName: string };
+  const [socialCandidateId, setSocialCandidateId] = useState<string | null>(null);
+  const [socialCandidates, setSocialCandidates] = useState<SocialCandidate[]>([]);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [savingSocialChoice, setSavingSocialChoice] = useState(false);
 
   // Project form
   const [projForm, setProjForm] = useState({
@@ -192,6 +202,19 @@ export default function ClientDetailPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const candidateId = searchParams.get("candidateId");
+    if (!candidateId) return;
+    fetch(`/api/social/connections?candidateId=${encodeURIComponent(candidateId)}`)
+      .then((response) => response.json())
+      .then((data) => {
+        if (!Array.isArray(data.accounts)) return;
+        setSocialCandidateId(candidateId);
+        setSocialCandidates(data.accounts);
+        setSelectedCandidateIds(data.accounts.map((account: SocialCandidate) => account.id));
+      });
+  }, [searchParams]);
+
   function changeTab(t: Tab) {
     setTab(t);
     const sp = new URLSearchParams(searchParams.toString());
@@ -221,6 +244,7 @@ export default function ClientDetailPage() {
     setAllProjects(data.projects ?? []);
     if (data.project) {
       setProject(data.project);
+      fetchSocialConnections(data.project.id);
       const b = (data.project.brief ?? {}) as Record<string, string>;
       setProjForm({
         name: data.project.name,
@@ -270,6 +294,68 @@ export default function ClientDetailPage() {
       const data = await res.json();
       setMembers(data.members ?? []);
     }
+  }
+
+  async function fetchSocialConnections(projectId: string) {
+    setSocialLoading(true);
+    const res = await fetch(`/api/social/connections?projectId=${projectId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setSocialConnections(data.connections ?? []);
+    }
+    setSocialLoading(false);
+  }
+
+  function connectSocial(provider: "meta" | "linkedin") {
+    if (!project) return;
+    window.location.assign(`/api/social/connect/${provider}?projectId=${encodeURIComponent(project.id)}&clientId=${encodeURIComponent(clientId)}`);
+  }
+
+  async function disconnectSocial(connectionId: string) {
+    const res = await fetch("/api/social/connections", {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ connectionId }),
+    });
+    if (res.ok) setSocialConnections((connections) => connections.filter((connection) => connection.id !== connectionId));
+  }
+
+  async function handlePublishContent() {
+    if (!adminSelected) return;
+    setPublishingContent(true);
+    setPublishMessage("");
+    const res = await fetch("/api/social/publish", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentId: adminSelected.id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.published) {
+      setContent((items) => items.map((item) => item.id === adminSelected.id ? { ...item, status: "published" } : item));
+      setAdminSelected((item) => item ? { ...item, status: "published" } : null);
+      setPublishMessage("Published to every connected platform.");
+    } else {
+      const results = Array.isArray(data.results)
+        ? data.results.filter((result: { ok: boolean }) => !result.ok).map((result: { platform: string; error: string }) => `${result.platform}: ${result.error}`).join(" ")
+        : data.error;
+      setPublishMessage(results || "Publishing did not complete. Please try again.");
+    }
+    setPublishingContent(false);
+  }
+
+  async function saveSocialChoice() {
+    if (!socialCandidateId || selectedCandidateIds.length === 0) return;
+    setSavingSocialChoice(true);
+    const res = await fetch("/api/social/connections", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ candidateId: socialCandidateId, accountIds: selectedCandidateIds }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setSavingSocialChoice(false);
+    if (!res.ok) { alert(data.error ?? "Unable to save social accounts."); return; }
+    setSocialCandidateId(null);
+    setSocialCandidates([]);
+    if (project) fetchSocialConnections(project.id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("candidateId");
+    params.delete("social");
+    router.replace(`?${params.toString()}`, { scroll: false });
   }
 
   async function handleAddMember(e: React.FormEvent) {
@@ -1514,6 +1600,70 @@ export default function ClientDetailPage() {
               )}
             </div>
 
+            {project && (
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">Social publishing</p>
+                    <p className="text-xs text-[var(--foreground-muted)] mt-0.5">Connect this client&apos;s own accounts. Only approved content can be published.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => connectSocial("meta")} className="gap-1.5">
+                      <Globe className="w-3.5 h-3.5" /> Connect Instagram + Facebook
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => connectSocial("linkedin")} className="gap-1.5">
+                      <Building2 className="w-3.5 h-3.5" /> Connect LinkedIn
+                    </Button>
+                  </div>
+                </div>
+                {socialLoading ? (
+                  <p className="text-xs text-[var(--foreground-subtle)] mt-3">Loading connected accounts…</p>
+                ) : socialConnections.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {socialConnections.map((connection) => (
+                      <span key={connection.id} className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1.5 text-xs text-emerald-300">
+                        <span className="font-semibold">{connection.platform}</span>
+                        <span className="max-w-40 truncate text-emerald-100/80">{connection.account_name}</span>
+                        <button onClick={() => disconnectSocial(connection.id)} className="text-emerald-200/70 hover:text-red-300" title="Disconnect account"><X className="w-3 h-3" /></button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-300/80 mt-3">No social accounts connected yet.</p>
+                )}
+              </div>
+            )}
+
+            {socialCandidateId && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+                <div className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 shadow-2xl">
+                  <h3 className="text-base font-bold text-[var(--foreground)]">Choose this client&apos;s accounts</h3>
+                  <p className="mt-1 text-xs text-[var(--foreground-muted)]">Only the selected accounts will be linked to this client. You can change them later.</p>
+                  <div className="mt-4 space-y-2">
+                    {socialCandidates.map((account) => {
+                      const checked = selectedCandidateIds.includes(account.id);
+                      return (
+                        <label key={account.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => setSelectedCandidateIds((ids) => checked ? ids.filter((id) => id !== account.id) : [...ids, account.id])}
+                            className="accent-[var(--accent)]"
+                          />
+                          <span className="font-semibold text-[var(--foreground)]">{account.platform}</span>
+                          <span className="ml-auto truncate text-xs text-[var(--foreground-muted)]">{account.accountName}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-5 flex justify-end gap-2">
+                    <Button variant="secondary" onClick={() => { setSocialCandidateId(null); setSocialCandidates([]); }}>Cancel</Button>
+                    <Button onClick={saveSocialChoice} loading={savingSocialChoice} disabled={selectedCandidateIds.length === 0}>Connect selected</Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {content.length > 0 && (() => {
               const statuses: Array<{ key: ContentItem["status"] | "all"; label: string; color: string }> = [
                 { key: "all", label: "All", color: "border-[var(--border)] text-[var(--foreground-muted)] data-[active=true]:bg-[var(--surface-2)] data-[active=true]:border-zinc-500 data-[active=true]:text-[var(--foreground)]" },
@@ -1871,6 +2021,21 @@ export default function ClientDetailPage() {
                         <option value="published">Published</option>
                       </select>
                     </div>
+                    {adminSelected.status === "approved" && (
+                      <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold text-emerald-200">Ready to publish</p>
+                            <p className="text-[11px] text-emerald-100/70 mt-0.5">Posts to each connected Instagram, Facebook and LinkedIn account selected on this item.</p>
+                          </div>
+                          <Button size="sm" onClick={handlePublishContent} loading={publishingContent} disabled={socialConnections.length === 0} className="gap-1.5 bg-emerald-500 hover:bg-emerald-600">
+                            <Send className="w-3.5 h-3.5" /> Publish now
+                          </Button>
+                        </div>
+                        {socialConnections.length === 0 && <p className="text-[11px] text-amber-200 mt-2">Connect a social account above before publishing.</p>}
+                        {publishMessage && <p className={cn("text-[11px] mt-2", publishMessage.startsWith("Published") ? "text-emerald-200" : "text-red-300")}>{publishMessage}</p>}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <label className="text-xs font-medium text-[var(--foreground-muted)] block">Scheduled Date</label>
