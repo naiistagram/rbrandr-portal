@@ -1649,8 +1649,8 @@ export default function ClientDetailPage() {
                     </div>
                   </div>
                   <div>
-                    <label className={labelClass}>Description</label>
-                    <textarea rows={3} value={contentForm.description} onChange={(e) => setContentForm((f) => ({ ...f, description: e.target.value }))} placeholder="Content description or notes..." className={`${inputClass} resize-none`} />
+                    <label className={labelClass}>Caption / Description</label>
+                    <textarea rows={8} value={contentForm.description} onChange={(e) => setContentForm((f) => ({ ...f, description: e.target.value }))} placeholder="Write the full caption, hashtags, or notes..." className={`${inputClass} min-h-48 resize-y leading-relaxed`} />
                   </div>
                   <div>
                     <label className={labelClass}>Attachments (PDF, images, videos)</label>
