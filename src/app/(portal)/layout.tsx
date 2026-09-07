@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Sidebar } from "@/components/layout/sidebar";
+import { PortalUserProvider } from "@/components/layout/portal-user-context";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,7 @@ export default async function PortalLayout({
   }
 
   return (
+    <PortalUserProvider user={{ id: profile.id, fullName: profile.full_name, avatarUrl: profile.avatar_url }}>
     <div className="flex h-full min-h-screen">
       <Sidebar
         user={{
@@ -99,5 +101,6 @@ export default async function PortalLayout({
         {children}
       </main>
     </div>
+    </PortalUserProvider>
   );
 }

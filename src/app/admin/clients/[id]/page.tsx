@@ -825,15 +825,33 @@ export default function ClientDetailPage() {
   }
 
   async function handleUpdateContentDate(itemId: string, newDate: string) {
-    const { error } = await supabase.from("content_items").update({ scheduled_date: newDate || null }).eq("id", itemId);
-    if (error) { alert(`Failed to save date: ${error.message}`); return; }
+    const res = await fetch("/api/admin/content-status", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, scheduledDate: newDate || null }),
+    });
+    if (!res.ok) {
+      const { error = "Unable to save date" } = await res.json().catch(() => ({}));
+      alert(`Failed to save date: ${error}`);
+      return false;
+    }
     setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_date: newDate || null } : c));
+    return true;
   }
 
   async function handleUpdateContentTime(itemId: string, newTime: string) {
-    const { error } = await supabase.from("content_items").update({ scheduled_time: newTime || null }).eq("id", itemId);
-    if (error) { alert(`Failed to save time: ${error.message}`); return; }
+    const res = await fetch("/api/admin/content-status", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemId, scheduledTime: newTime || null }),
+    });
+    if (!res.ok) {
+      const { error = "Unable to save time" } = await res.json().catch(() => ({}));
+      alert(`Failed to save time: ${error}`);
+      return false;
+    }
     setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_time: newTime || null } : c));
+    return true;
   }
 
   function openAdminDetail(item: ContentItem) {
@@ -1859,9 +1877,11 @@ export default function ClientDetailPage() {
                         <input
                           type="date"
                           value={adminSelected.scheduled_date ?? ""}
-                          onChange={(e) => {
-                            handleUpdateContentDate(adminSelected.id, e.target.value);
-                            setAdminSelected((p) => p ? { ...p, scheduled_date: e.target.value || null } : null);
+                          onChange={async (e) => {
+                            const newDate = e.target.value;
+                            if (await handleUpdateContentDate(adminSelected.id, newDate)) {
+                              setAdminSelected((p) => p ? { ...p, scheduled_date: newDate || null } : null);
+                            }
                           }}
                           className={inputClass}
                         />
@@ -1871,9 +1891,11 @@ export default function ClientDetailPage() {
                         <input
                           type="time"
                           value={adminSelected.scheduled_time ?? ""}
-                          onChange={(e) => {
-                            handleUpdateContentTime(adminSelected.id, e.target.value);
-                            setAdminSelected((p) => p ? { ...p, scheduled_time: e.target.value || null } : null);
+                          onChange={async (e) => {
+                            const newTime = e.target.value;
+                            if (await handleUpdateContentTime(adminSelected.id, newTime)) {
+                              setAdminSelected((p) => p ? { ...p, scheduled_time: newTime || null } : null);
+                            }
                           }}
                           className={inputClass}
                         />

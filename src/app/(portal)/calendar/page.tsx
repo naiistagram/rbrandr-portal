@@ -213,7 +213,10 @@ export default function CalendarPage() {
 
   const inputClass = "w-full px-3.5 py-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] text-sm outline-none focus:border-[var(--accent)] transition-all";
 
-  function DetailPanelBody() {
+  // Keep this as a render helper, rather than a component declared inside
+  // CalendarPage. A newly declared nested component remounts on every keystroke,
+  // causing the feedback textarea to lose focus.
+  function renderDetailPanel() {
     if (!selected) return null;
     return (
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
@@ -737,7 +740,7 @@ export default function CalendarPage() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <DetailPanelBody />
+            {renderDetailPanel()}
           </div>
         )}
 
@@ -756,7 +759,7 @@ export default function CalendarPage() {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <DetailPanelBody />
+              {renderDetailPanel()}
             </div>
           </>
         )}

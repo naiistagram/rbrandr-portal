@@ -28,15 +28,8 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(user.avatar_url);
+  const avatarUrl = user.avatar_url;
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    supabase.from("profiles").select("avatar_url").eq("id", user.id).single().then(({ data }) => {
-      if (data?.avatar_url !== undefined) setAvatarUrl(data.avatar_url);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.id]);
 
   useEffect(() => {
     setMobileOpen(false);

@@ -9,6 +9,7 @@ import Link from "next/link";
 import type { Notification } from "@/lib/supabase/types";
 import { CommandPalette } from "@/components/ui/command-palette";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { usePortalUser } from "@/components/layout/portal-user-context";
 
 interface TopbarProps {
   title: string;
@@ -21,18 +22,21 @@ interface TopbarProps {
 export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullName: nameProp }: TopbarProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
+  const portalUser = usePortalUser();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(avatarProp ?? null);
   const [fullName, setFullName] = useState<string>(nameProp ?? "");
   const supabase = createClient();
+  const effectiveAvatarUrl = portalUser?.avatarUrl ?? avatarUrl;
+  const effectiveFullName = portalUser?.fullName ?? fullName;
 
   useEffect(() => {
-    if (!avatarProp && !nameProp && userId) {
+    if (!portalUser && !avatarProp && !nameProp && userId) {
       supabase.from("profiles").select("avatar_url, full_name").eq("id", userId).single().then(({ data }) => {
         if (data) { setAvatarUrl(data.avatar_url); setFullName(data.full_name); }
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, portalUser, avatarProp, nameProp]);
 
   useEffect(() => {
     fetchNotifications();
@@ -157,14 +161,14 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
           )}
         </div>
         {/* Avatar */}
-        {(avatarUrl || fullName) && (
+        {(effectiveAvatarUrl || effectiveFullName) && (
           <Link href="/settings" title="Profile settings">
             <div className="w-8 h-8 rounded-full bg-[var(--accent-subtle)] border-2 border-[var(--accent)]/30 hover:border-[var(--accent)]/60 flex items-center justify-center overflow-hidden transition-all cursor-pointer flex-shrink-0">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={fullName ?? ""} className="w-full h-full object-cover" />
+              {effectiveAvatarUrl ? (
+                <img src={effectiveAvatarUrl} alt={effectiveFullName} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-[10px] font-bold text-[var(--accent)]">
-                  {getInitials(fullName ?? "")}
+                  {getInitials(effectiveFullName)}
                 </span>
               )}
             </div>

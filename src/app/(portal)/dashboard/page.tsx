@@ -17,17 +17,28 @@ export default async function DashboardPage() {
   const admin = createAdminClient();
 
   // Use admin client to avoid RLS issues reading own profile
-  const { data: profile } = await admin.from("profiles").select("*").eq("id", user.id).single();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name, client_role")
+    .eq("id", user.id)
+    .single();
 
   // Always fetch both owned projects and projects via membership — a user can be both
   const [{ data: ownedData }, { data: memberData }] = await Promise.all([
-    admin.from("projects").select("*").eq("client_id", user.id).order("created_at", { ascending: false }),
-    admin.from("project_members").select("project_id, projects(*)").eq("user_id", user.id),
+    admin
+      .from("projects")
+      .select("id, client_id, name, service_type, goals, competition, kpis, brief, status")
+      .eq("client_id", user.id)
+      .order("created_at", { ascending: false }),
+    admin
+      .from("project_members")
+      .select("project_id, projects(id, client_id, name, service_type, goals, competition, kpis, brief, status)")
+      .eq("user_id", user.id),
   ]);
 
   const ownedProjects = ownedData ?? [];
   const memberProjects = (memberData ?? [])
-    .map((m) => ((m as unknown) as { projects: import("@/lib/supabase/types").Project }).projects)
+    .map((m) => ((m as unknown) as { projects: (typeof ownedProjects)[number] }).projects)
     .filter(Boolean);
 
   // Deduplicate (user might appear as both client_id and project_member on the same project)
@@ -45,10 +56,15 @@ export default async function DashboardPage() {
   const [{ data: allContent }, { data: pendingForms }, { data: pendingContracts }, { data: openTickets }] =
     await Promise.all([
       projectIds.length > 0
-        ? admin.from("content_items").select("*").in("project_id", projectIds).order("updated_at", { ascending: false }).limit(50)
+        ? admin
+            .from("content_items")
+            .select("id, title, content_type, platforms, status, file_urls")
+            .in("project_id", projectIds)
+            .order("updated_at", { ascending: false })
+            .limit(50)
         : Promise.resolve({ data: [] }),
       projectIds.length > 0
-        ? admin.from("forms").select("*").in("project_id", projectIds).eq("status", "pending").limit(10)
+        ? admin.from("forms").select("id, title").in("project_id", projectIds).eq("status", "pending").limit(10)
         : Promise.resolve({ data: [] }),
       // Contracts only for CEO-role, direct project owners
       isCeo && ownedProjectIds.length > 0

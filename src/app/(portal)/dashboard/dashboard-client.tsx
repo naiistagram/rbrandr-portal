@@ -24,7 +24,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL } from "@/lib/content-display";
-import type { Project, ContentItem, Form } from "@/lib/supabase/types";
+import type { Project, ContentItem } from "@/lib/supabase/types";
+
+type DashboardProject = Pick<
+  Project,
+  "id" | "client_id" | "name" | "service_type" | "goals" | "competition" | "kpis" | "brief" | "status"
+>;
+type DashboardContent = Pick<ContentItem, "id" | "title" | "content_type" | "platforms" | "status" | "file_urls">;
+type DashboardForm = { id: string; title: string };
 
 const SERVICE_LABELS: Record<string, string> = {
   social_media: "Social Media",
@@ -50,9 +57,9 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 interface Props {
-  projects: Project[];
-  allContent: ContentItem[];
-  pendingForms: Form[];
+  projects: DashboardProject[];
+  allContent: DashboardContent[];
+  pendingForms: DashboardForm[];
   pendingContracts: { id: string; title: string; status: string }[];
   openTickets: { id: string; title: string; status: string; priority: string }[];
   /** Read-only admin preview: the linked pages (tickets/content/etc.) don't
@@ -61,7 +68,7 @@ interface Props {
 }
 
 export function DashboardClient({ projects, allContent, pendingForms, pendingContracts, openTickets, preview = false }: Props) {
-  const [modalProject, setModalProject] = useState<Project | null>(null);
+  const [modalProject, setModalProject] = useState<DashboardProject | null>(null);
 
   const pendingContent = allContent.filter((c) => c.status === "in_review");
   const contentInReview = pendingContent.length;

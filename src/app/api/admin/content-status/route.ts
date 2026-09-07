@@ -25,19 +25,40 @@ export async function PATCH(request: NextRequest) {
   const admin = await verifyAdmin();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { itemId, status, clientId } = await request.json();
-  if (!itemId || !status) return NextResponse.json({ error: "itemId and status required" }, { status: 400 });
+  const { itemId, status, scheduledDate, scheduledTime, clientId } = await request.json();
+  if (!itemId) return NextResponse.json({ error: "itemId required" }, { status: 400 });
+
+  const updates: Record<string, string | null> = {};
+  if (status !== undefined) {
+    if (!STATUS_LABELS[status]) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+    updates.status = status;
+  }
+  if (scheduledDate !== undefined) {
+    if (scheduledDate !== null && scheduledDate !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+      return NextResponse.json({ error: "Invalid scheduled date" }, { status: 400 });
+    }
+    updates.scheduled_date = scheduledDate || null;
+  }
+  if (scheduledTime !== undefined) {
+    if (scheduledTime !== null && scheduledTime !== "" && !/^\d{2}:\d{2}$/.test(scheduledTime)) {
+      return NextResponse.json({ error: "Invalid scheduled time" }, { status: 400 });
+    }
+    updates.scheduled_time = scheduledTime || null;
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "No changes supplied" }, { status: 400 });
+  }
 
   const { data: item, error } = await admin
     .from("content_items")
-    .update({ status })
+    .update(updates)
     .eq("id", itemId)
     .select("id, project_id, title")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  if (clientId) {
+  if (status !== undefined && clientId) {
     await admin.from("notifications").insert({
       user_id: clientId,
       title: "Content Status Updated",
