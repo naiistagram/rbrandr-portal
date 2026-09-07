@@ -120,7 +120,9 @@ export default function ClientDetailPage() {
   const [socialConnections, setSocialConnections] = useState<SocialConnection[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
   const [publishingContent, setPublishingContent] = useState(false);
+  const [schedulingContent, setSchedulingContent] = useState(false);
   const [publishMessage, setPublishMessage] = useState("");
+  const [scheduleMessage, setScheduleMessage] = useState("");
   type SocialCandidate = { id: string; platform: "Facebook" | "Instagram"; accountName: string };
   const [socialCandidateId, setSocialCandidateId] = useState<string | null>(null);
   const [socialCandidates, setSocialCandidates] = useState<SocialCandidate[]>([]);
@@ -337,6 +339,30 @@ export default function ClientDetailPage() {
       setPublishMessage(results || "Publishing did not complete. Please try again.");
     }
     setPublishingContent(false);
+  }
+
+  async function handleScheduleContent() {
+    if (!adminSelected) return;
+    setSchedulingContent(true);
+    setScheduleMessage("");
+    const res = await fetch("/api/social/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contentId: adminSelected.id,
+        scheduledDate: adminSelected.scheduled_date,
+        scheduledTime: adminSelected.scheduled_time,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.content?.publish_at) {
+      setContent((items) => items.map((item) => item.id === adminSelected.id ? { ...item, publish_at: data.content.publish_at, publish_error: null } : item));
+      setAdminSelected((item) => item ? { ...item, publish_at: data.content.publish_at, publish_error: null } : null);
+      setScheduleMessage("Queued for automatic publishing.");
+    } else {
+      setScheduleMessage(data.error ?? "Unable to schedule this post.");
+    }
+    setSchedulingContent(false);
   }
 
   async function saveSocialChoice() {
@@ -2025,15 +2051,26 @@ export default function ClientDetailPage() {
                       <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-3">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-xs font-semibold text-emerald-200">Ready to publish</p>
-                            <p className="text-[11px] text-emerald-100/70 mt-0.5">Posts to each connected Instagram, Facebook and LinkedIn account selected on this item.</p>
+                            <p className="text-xs font-semibold text-emerald-200">{adminSelected.publish_at ? "Scheduled to publish" : "Ready to publish"}</p>
+                            <p className="text-[11px] text-emerald-100/70 mt-0.5">
+                              {adminSelected.publish_at
+                                ? `Queued for ${formatDate(adminSelected.scheduled_date ?? "")} at ${formatTime(adminSelected.scheduled_time ?? "")}.`
+                                : "Posts to each connected account selected on this item."}
+                            </p>
                           </div>
-                          <Button size="sm" onClick={handlePublishContent} loading={publishingContent} disabled={socialConnections.length === 0} className="gap-1.5 bg-emerald-500 hover:bg-emerald-600">
-                            <Send className="w-3.5 h-3.5" /> Publish now
-                          </Button>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button size="sm" variant="secondary" onClick={handleScheduleContent} loading={schedulingContent} disabled={socialConnections.length === 0 || !adminSelected.scheduled_date || !adminSelected.scheduled_time} className="gap-1.5">
+                              <Clock className="w-3.5 h-3.5" /> {adminSelected.publish_at ? "Update schedule" : "Schedule publish"}
+                            </Button>
+                            <Button size="sm" onClick={handlePublishContent} loading={publishingContent} disabled={socialConnections.length === 0} className="gap-1.5 bg-emerald-500 hover:bg-emerald-600">
+                              <Send className="w-3.5 h-3.5" /> Publish now
+                            </Button>
+                          </div>
                         </div>
                         {socialConnections.length === 0 && <p className="text-[11px] text-amber-200 mt-2">Connect a social account above before publishing.</p>}
                         {publishMessage && <p className={cn("text-[11px] mt-2", publishMessage.startsWith("Published") ? "text-emerald-200" : "text-red-300")}>{publishMessage}</p>}
+                        {scheduleMessage && <p className={cn("text-[11px] mt-2", scheduleMessage.startsWith("Queued") ? "text-emerald-200" : "text-red-300")}>{scheduleMessage}</p>}
+                        {adminSelected.publish_error && <p className="text-[11px] text-red-300 mt-2">Last publishing attempt: {adminSelected.publish_error}</p>}
                       </div>
                     )}
                     <div className="grid grid-cols-2 gap-3">

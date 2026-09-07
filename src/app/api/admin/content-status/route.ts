@@ -38,12 +38,20 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Invalid scheduled date" }, { status: 400 });
     }
     updates.scheduled_date = scheduledDate || null;
+    // A changed date must be explicitly re-queued by an admin, otherwise an
+    // earlier UTC publish time could still fire.
+    updates.publish_at = null;
+    updates.publish_started_at = null;
+    updates.publish_error = null;
   }
   if (scheduledTime !== undefined) {
     if (scheduledTime !== null && scheduledTime !== "" && !/^\d{2}:\d{2}$/.test(scheduledTime)) {
       return NextResponse.json({ error: "Invalid scheduled time" }, { status: 400 });
     }
     updates.scheduled_time = scheduledTime || null;
+    updates.publish_at = null;
+    updates.publish_started_at = null;
+    updates.publish_error = null;
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No changes supplied" }, { status: 400 });

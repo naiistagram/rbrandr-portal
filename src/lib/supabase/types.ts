@@ -59,6 +59,9 @@ export interface ContentItem {
   status: "draft" | "in_review" | "approved" | "rejected" | "published";
   scheduled_date: string | null;
   scheduled_time: string | null;
+  publish_at?: string | null;
+  publish_started_at?: string | null;
+  publish_error?: string | null;
   file_urls: string[] | null;
   feedback: string | null;
   created_by: string;
