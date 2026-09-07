@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, Settings, LogOut, ChevronRight, Shield, Menu, X } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Settings, LogOut, ChevronRight, Shield, Menu, X } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 const NAV_ITEMS = [
   { label: "Overview", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Clients", href: "/admin/clients", icon: Users },
+  { label: "Publishing Calendar", href: "/admin/calendar", icon: CalendarDays },
 ];
 
 interface AdminSidebarProps {
