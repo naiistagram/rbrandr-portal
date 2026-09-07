@@ -10,6 +10,9 @@ import {
   MessageSquare,
   Clock,
   X,
+  Copy,
+  Check,
+  Expand,
   List,
   CalendarDays,
   Calendar,
@@ -87,6 +90,8 @@ export default function CalendarPage() {
   const [viewerFiles, setViewerFiles] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerItemId, setViewerItemId] = useState<string | null>(null);
+  const [showFullContent, setShowFullContent] = useState(false);
+  const [captionCopied, setCaptionCopied] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -194,6 +199,13 @@ export default function CalendarPage() {
     setViewerFiles(newUrls);
   }
 
+  async function copyCaption() {
+    if (!selected?.description) return;
+    await navigator.clipboard.writeText(selected.description);
+    setCaptionCopied(true);
+    window.setTimeout(() => setCaptionCopied(false), 2000);
+  }
+
   // ── Calendar helpers ──
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -240,8 +252,16 @@ export default function CalendarPage() {
         </div>
         {selected.description && (
           <div>
-            <p className="text-xs font-semibold text-[var(--foreground-muted)] mb-1.5 uppercase tracking-wider">Description</p>
-            <p className="text-sm text-[var(--foreground-muted)] leading-relaxed whitespace-pre-line">{selected.description}</p>
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Caption</p>
+              <button
+                onClick={() => setShowFullContent(true)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:opacity-80 transition-opacity cursor-pointer"
+              >
+                <Expand className="w-3 h-3" /> Read full content
+              </button>
+            </div>
+            <p className="text-sm text-[var(--foreground-muted)] leading-relaxed whitespace-pre-line line-clamp-6">{selected.description}</p>
           </div>
         )}
         {selected.file_urls && selected.file_urls.length > 0 && (
@@ -308,6 +328,70 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  function renderFullContentModal() {
+    if (!selected || !showFullContent) return null;
+    const images = selected.file_urls?.filter((url) => /\.(png|jpg|jpeg|gif|webp)/i.test(url) || (url.includes("storage") && !url.includes(".pdf") && !url.includes(".zip"))) ?? [];
+
+    return (
+      <div className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6" onClick={() => setShowFullContent(false)}>
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="full-content-title"
+          className="w-full max-w-6xl max-h-[90vh] bg-[var(--surface)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col animate-fade-in"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <header className="flex items-start justify-between gap-4 px-5 sm:px-7 py-5 border-b border-[var(--border)] flex-shrink-0">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-subtle)]">Content preview</p>
+              <h2 id="full-content-title" className="mt-1 text-xl font-bold text-[var(--foreground)] truncate">{selected.title}</h2>
+              <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <StatusDot status={selected.status} />
+                <span className={cn("text-xs font-medium", STATUS_CONFIG[selected.status]?.color)}>{STATUS_CONFIG[selected.status]?.label}</span>
+                {selected.platforms.map((platform) => <Badge key={platform} variant="default">{platform}</Badge>)}
+              </div>
+            </div>
+            <button onClick={() => setShowFullContent(false)} aria-label="Close full content preview" className="p-2 -mr-2 text-[var(--foreground-subtle)] hover:text-[var(--foreground)] hover:bg-[var(--surface-2)] rounded-lg transition-colors cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </header>
+
+          <div className={cn("overflow-y-auto p-5 sm:p-7 gap-7", images.length > 0 ? "grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.8fr)]" : "max-w-3xl w-full mx-auto")}>
+            <div>
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider">Caption</p>
+                {selected.description && (
+                  <button onClick={copyCaption} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--border)] text-xs font-medium text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-2)] transition-colors cursor-pointer">
+                    {captionCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {captionCopied ? "Copied" : "Copy caption"}
+                  </button>
+                )}
+              </div>
+              {selected.description ? (
+                <p className="whitespace-pre-line text-[15px] leading-7 text-[var(--foreground)]">{selected.description}</p>
+              ) : (
+                <p className="text-sm text-[var(--foreground-subtle)]">No caption has been added yet.</p>
+              )}
+            </div>
+
+            {images.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider mb-4">Creative</p>
+                <div className={cn("grid gap-3", images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+                  {images.map((url, index) => (
+                    <button key={url} onClick={() => openViewer(selected.file_urls!, selected.file_urls!.indexOf(url), selected.id)} className="relative aspect-square rounded-xl overflow-hidden bg-[var(--surface-2)] border border-[var(--border)] group cursor-pointer">
+                      <img src={url} alt={`${selected.title} creative ${index + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
     );
   }
@@ -764,6 +848,8 @@ export default function CalendarPage() {
           </>
         )}
       </div>
+
+      {renderFullContentModal()}
 
       {/* File Viewer */}
       {viewerFiles.length > 0 && viewerItemId && (
