@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { User, Camera, Save, Mail, Building2, Lock, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { User, Camera, Save, Mail, Building2, Lock, Eye, EyeOff, CheckCircle2, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Topbar } from "@/components/layout/topbar";
 import { getInitials } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
+
+type TeamMember = Pick<Profile, "id" | "full_name" | "email" | "avatar_url" | "job_title" | "client_role">;
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -25,6 +27,7 @@ export default function SettingsPage() {
   const [changingPwd, setChangingPwd] = useState(false);
   const [pwdError, setPwdError] = useState("");
   const [pwdSaved, setPwdSaved] = useState(false);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -42,6 +45,12 @@ export default function SettingsPage() {
         setProfile(data);
         setForm({ fullName: data.full_name, company: data.company_name ?? "" });
         setAvatarPreview(data.avatar_url);
+      }
+
+      const teamRes = await fetch("/api/team", { cache: "no-store" });
+      if (teamRes.ok) {
+        const team = await teamRes.json();
+        setTeamMembers(team.members ?? []);
       }
     }
     init();
@@ -231,6 +240,39 @@ export default function SettingsPage() {
               )}
             </Button>
           </div>
+
+          {teamMembers.length > 0 && (
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[var(--foreground)] flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[var(--foreground-muted)]" />
+                  Your Team
+                </h3>
+                <p className="text-xs text-[var(--foreground-subtle)] mt-1">
+                  These contacts share your project and can view content updates.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {teamMembers.map((member) => (
+                  <div key={member.id} className="flex items-center gap-3 rounded-lg bg-[var(--surface-2)] px-3 py-2.5">
+                    <div className="w-8 h-8 rounded-full bg-[var(--accent-subtle)] border border-[var(--accent)]/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+                      {member.avatar_url ? (
+                        <img src={member.avatar_url} alt={member.full_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[10px] font-bold text-[var(--accent)]">{getInitials(member.full_name)}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[var(--foreground)] truncate">{member.full_name}</p>
+                      <p className="text-xs text-[var(--foreground-subtle)] truncate">
+                        {member.job_title || (member.client_role === "ceo" ? "Primary contact" : "Team member")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Security */}
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 space-y-4">
