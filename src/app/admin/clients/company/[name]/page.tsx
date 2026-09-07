@@ -377,6 +377,21 @@ export default async function CompanyPage({
 
           return (
             <div className="space-y-6">
+              {primaryClient && primaryProject && (
+                <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">Social publishing</p>
+                    <p className="mt-0.5 text-xs text-[var(--foreground-muted)]">Connect this company&apos;s accounts and publish approved content.</p>
+                  </div>
+                  <Link
+                    href={`/admin/clients/${primaryClient.id}?tab=Content`}
+                    className="inline-flex items-center justify-center rounded-lg bg-[var(--accent)] px-3 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    Manage social publishing
+                  </Link>
+                </div>
+              )}
+
               {/* Stats row */}
               <div className="grid grid-cols-5 gap-3">
                 {(["draft", "in_review", "approved", "rejected", "published"] as const).map((s) => {
