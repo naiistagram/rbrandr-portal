@@ -108,7 +108,7 @@ body {
   50% { opacity: 0.5; }
 }
 
-/* A moving gold highlight confined to the card perimeter. */
+/* A narrow gold "laser" that runs around the interactive review controls. */
 @property --review-border-angle {
   syntax: "<angle>";
   initial-value: 0deg;
@@ -119,37 +119,40 @@ body {
   to { --review-border-angle: 360deg; }
 }
 
-.content-review-border {
+.review-status-laser {
   position: relative;
   isolation: isolate;
-  border-color: #d4a637;
+  border-color: #7d6424;
 }
 
-.content-review-border::after {
+.review-status-laser::after {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: -1px;
   z-index: 2;
   border-radius: inherit;
-  padding: 2px;
+  padding: 1px;
   background: conic-gradient(
     from var(--review-border-angle),
-    #b8860b 0deg,
-    #d4a637 230deg,
-    #ffd76a 290deg,
-    #fff3c4 320deg,
-    #b8860b 360deg
+    transparent 0deg,
+    transparent 270deg,
+    rgba(212, 166, 55, 0.45) 292deg,
+    #ffd76a 308deg,
+    #fff8d7 316deg,
+    #d4a637 328deg,
+    transparent 350deg,
+    transparent 360deg
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
-  animation: review-border-orbit 4s linear infinite;
+  animation: review-border-orbit 2.6s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .content-review-border::after {
+  .review-status-laser::after {
     animation: none;
     background: #d4a637;
   }

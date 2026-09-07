@@ -181,7 +181,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
         onClick={() => openDetail(item)}
         className={cn(
           "group text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:border-zinc-600 transition-all w-full",
-          item.status === "in_review" && "content-review-border"
+          item.status === "in_review" && "border-amber-400/80"
         )}
       >
         <div className={cn(
@@ -283,6 +283,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
                 onClick={() => setStatusFilter(s)}
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer flex items-center gap-1.5",
+                  s === "in_review" && "review-status-laser",
                   statusFilter === s
                     ? "bg-[var(--accent-subtle)] text-[var(--accent)]"
                     : "bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
@@ -334,7 +335,11 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
           {(["draft", "in_review", "approved", "rejected", "published"] as const).map((s) => {
             const config = STATUS_CONFIG[s];
             return (
-              <Card key={s} className="py-3 px-4 cursor-pointer" onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}>
+              <Card
+                key={s}
+                className={cn("py-3 px-4 cursor-pointer", s === "in_review" && "review-status-laser")}
+                onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
+              >
                 <p className="text-2xl font-bold text-[var(--foreground)]">{counts[s]}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <StatusDot status={s} />
