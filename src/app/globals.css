@@ -108,6 +108,53 @@ body {
   50% { opacity: 0.5; }
 }
 
+/* A moving gold highlight confined to the card perimeter. */
+@property --review-border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes review-border-orbit {
+  to { --review-border-angle: 360deg; }
+}
+
+.content-review-border {
+  position: relative;
+  isolation: isolate;
+  border-color: #d4a637;
+}
+
+.content-review-border::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--review-border-angle),
+    #b8860b 0deg,
+    #d4a637 230deg,
+    #ffd76a 290deg,
+    #fff3c4 320deg,
+    #b8860b 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: review-border-orbit 4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-review-border::after {
+    animation: none;
+    background: #d4a637;
+  }
+}
+
 .pulse-accent {
   animation: pulse-accent 2s ease-in-out infinite;
 }

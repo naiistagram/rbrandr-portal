@@ -179,7 +179,10 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
     return (
       <button
         onClick={() => openDetail(item)}
-        className="group text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:border-zinc-600 transition-all w-full"
+        className={cn(
+          "group text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:border-zinc-600 transition-all w-full",
+          item.status === "in_review" && "content-review-border"
+        )}
       >
         <div className={cn(
           "relative aspect-[4/3] bg-[var(--surface-2)] flex items-center justify-center overflow-hidden",
