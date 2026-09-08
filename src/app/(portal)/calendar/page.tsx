@@ -94,6 +94,32 @@ export default function CalendarPage() {
   const [captionCopied, setCaptionCopied] = useState(false);
 
   useEffect(() => {
+    if (!projectId) return;
+    const applyChange = (event: string, next: ContentItem | null, oldId?: string) => {
+      setItems((previous) => {
+        if (event === "DELETE") return previous.filter((item) => item.id !== oldId);
+        if (!next) return previous;
+        const exists = previous.some((item) => item.id === next.id);
+        return exists ? previous.map((item) => item.id === next.id ? next : item) : [...previous, next];
+      });
+      setSelected((current) => current && next && current.id === next.id ? next : current);
+    };
+    const channel = supabase.channel(`calendar-content:${projectId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "content_items", filter: `project_id=eq.${projectId}` }, (payload) => {
+        applyChange(payload.eventType, (payload.new as ContentItem) ?? null, (payload.old as { id?: string }).id);
+      })
+      .subscribe();
+    const refresh = window.setInterval(() => {
+      fetch("/api/content").then((response) => response.ok ? response.json() : null).then((json) => {
+        if (json?.content) setItems(json.content);
+      });
+    }, 15000);
+    return () => { window.clearInterval(refresh); supabase.removeChannel(channel); };
+  // The client is deliberately stable for this page's lifetime.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;

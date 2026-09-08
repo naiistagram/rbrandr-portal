@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Plus,
@@ -25,6 +25,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { cn, STATUS_CONFIG, formatDate, formatTime } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL, PLATFORM_ORDER } from "@/lib/content-display";
 import type { ContentItem } from "@/lib/supabase/types";
+import { createClient } from "@/lib/supabase/client";
 
 type FilterStatus = "all" | ContentItem["status"];
 const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"] as const;
@@ -39,6 +40,7 @@ interface Props {
 }
 
 export function ContentClient({ initialItems, initialProjectId, userId, preview = false }: Props) {
+  const [supabase] = useState(() => createClient());
   const [items, setItems] = useState<ContentItem[]>(initialItems);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
@@ -59,6 +61,34 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
   const [mediaIndex, setMediaIndex] = useState(0);
 
   const statuses: FilterStatus[] = ["all", "draft", "in_review", "approved", "rejected", "published"];
+
+  // Keep the client-facing content view current when an admin adds, edits or
+  // publishes an item. A polling fallback keeps this working if Realtime is
+  // temporarily unavailable.
+  useEffect(() => {
+    if (!projectId || preview) return;
+    const applyChange = (event: string, next: ContentItem | null, oldId?: string) => {
+      setItems((previous) => {
+        if (event === "DELETE") return previous.filter((item) => item.id !== oldId);
+        if (!next) return previous;
+        const exists = previous.some((item) => item.id === next.id);
+        return exists ? previous.map((item) => item.id === next.id ? next : item) : [next, ...previous];
+      });
+      setSelected((current) => current && next && current.id === next.id ? next : current);
+    };
+    const channel = supabase.channel(`content-items:${projectId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "content_items", filter: `project_id=eq.${projectId}` }, (payload) => {
+        applyChange(payload.eventType, (payload.new as ContentItem) ?? null, (payload.old as { id?: string }).id);
+      })
+      .subscribe();
+    const refresh = window.setInterval(async () => {
+      const response = await fetch("/api/content");
+      if (!response.ok) return;
+      const json = await response.json();
+      setItems(json.content ?? []);
+    }, 15000);
+    return () => { window.clearInterval(refresh); supabase.removeChannel(channel); };
+  }, [projectId, preview, supabase]);
 
   const filtered = items.filter((item) => {
     const matchSearch = item.title.toLowerCase().includes(search.toLowerCase()) ||

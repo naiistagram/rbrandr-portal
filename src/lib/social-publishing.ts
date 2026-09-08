@@ -96,7 +96,10 @@ export async function publishContent(
     .in("platform", supportedPlatforms);
   if (error) throw new Error(error.message);
 
-  const caption = content.description?.trim() || content.title;
+  // Titles are internal labels for the content calendar. Social platforms must
+  // receive the caption/notes the admin wrote — never the internal title.
+  const caption = content.description?.trim() ?? "";
+  if (!caption) throw new Error("Add a caption or notes before publishing this content.");
   const attachment = firstMedia(content.file_urls);
   const results: PublishResult[] = await Promise.all((connections ?? []).map(async (connection) => {
     const item = connection as Connection;

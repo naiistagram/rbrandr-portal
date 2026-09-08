@@ -143,6 +143,11 @@ export async function PATCH(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (status === "approved" || status === "rejected") {
+    const [{ data: approver }, { data: contentProject }] = await Promise.all([
+      admin.from("profiles").select("full_name, company_name").eq("id", user.id).single(),
+      admin.from("projects").select("name").eq("id", data.project_id).single(),
+    ]);
+    const approverName = approver?.full_name ?? approver?.company_name ?? "A client";
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const label = status === "approved" ? "approved" : "rejected";
     const adminEmails = await getAdminEmails();
@@ -151,7 +156,7 @@ export async function PATCH(request: NextRequest) {
       subject: `Content ${label} by client — ${data.title}`,
       html: buildEmailHtml({
         title: `Content ${label}`,
-        body: `A client has <strong style="color:#fafafa;">${label}</strong> the content piece <strong style="color:#fafafa;">"${data.title}"</strong>${data.feedback ? ` with feedback: "${data.feedback}"` : ""}.`,
+        body: `<strong style="color:#fafafa;">${approverName}</strong>${contentProject?.name ? ` (${contentProject.name})` : ""} has <strong style="color:#fafafa;">${label}</strong> the content piece <strong style="color:#fafafa;">"${data.title}"</strong>${data.feedback ? ` with feedback: "${data.feedback}"` : ""}.`,
         ctaText: "View in admin",
         ctaUrl: `${appUrl}/admin/clients`,
       }),

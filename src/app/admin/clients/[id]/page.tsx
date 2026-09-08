@@ -328,15 +328,19 @@ export default function ClientDetailPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentId: adminSelected.id }),
     });
     const data = await res.json().catch(() => ({}));
+    const successful = Array.isArray(data.results)
+      ? data.results.filter((result: { ok: boolean }) => result.ok).map((result: { platform: string }) => result.platform)
+      : [];
+    const failed = Array.isArray(data.results)
+      ? data.results.filter((result: { ok: boolean }) => !result.ok).map((result: { platform: string; error: string }) => `${result.platform}: ${result.error}`).join(" ")
+      : data.error;
     if (res.ok && data.published) {
       setContent((items) => items.map((item) => item.id === adminSelected.id ? { ...item, status: "published" } : item));
       setAdminSelected((item) => item ? { ...item, status: "published" } : null);
-      setPublishMessage("Published to every connected platform.");
+      setPublishMessage(`Posted successfully to ${successful.join(" and ") || "the connected accounts"}.`);
     } else {
-      const results = Array.isArray(data.results)
-        ? data.results.filter((result: { ok: boolean }) => !result.ok).map((result: { platform: string; error: string }) => `${result.platform}: ${result.error}`).join(" ")
-        : data.error;
-      setPublishMessage(results || "Publishing did not complete. Please try again.");
+      const posted = successful.length ? `Posted successfully to ${successful.join(" and ")}. ` : "";
+      setPublishMessage(`${posted}${failed || "Publishing did not complete. Please try again."}`);
     }
     setPublishingContent(false);
   }
@@ -2068,7 +2072,7 @@ export default function ClientDetailPage() {
                           </div>
                         </div>
                         {socialConnections.length === 0 && <p className="text-[11px] text-amber-200 mt-2">Connect a social account above before publishing.</p>}
-                        {publishMessage && <p className={cn("text-[11px] mt-2", publishMessage.startsWith("Published") ? "text-emerald-200" : "text-red-300")}>{publishMessage}</p>}
+                        {publishMessage && <p className={cn("text-[11px] mt-2", publishMessage.startsWith("Posted successfully") ? "text-emerald-200" : "text-red-300")}>{publishMessage}</p>}
                         {scheduleMessage && <p className={cn("text-[11px] mt-2", scheduleMessage.startsWith("Queued") ? "text-emerald-200" : "text-red-300")}>{scheduleMessage}</p>}
                         {adminSelected.publish_error && <p className="text-[11px] text-red-300 mt-2">Last publishing attempt: {adminSelected.publish_error}</p>}
                       </div>

@@ -4,6 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
+  // Vercel cron requests do not carry a browser session. The route itself
+  // verifies CRON_SECRET, so it must bypass the portal-login redirect.
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) return supabaseResponse;
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
