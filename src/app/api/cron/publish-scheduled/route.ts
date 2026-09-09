@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { publishContent } from "@/lib/social-publishing";
+import { hasPendingFacebookSchedule, markPendingFacebookSchedulePublished, publishContent } from "@/lib/social-publishing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -30,7 +30,9 @@ export async function GET(request: NextRequest) {
       .select("id").maybeSingle();
     if (!claimed) continue;
     try {
-      const result = await publishContent(admin, item, null);
+      const facebookIsInMetaPlanner = await hasPendingFacebookSchedule(admin, item.id);
+      const result = await publishContent(admin, item, null, facebookIsInMetaPlanner ? ["Facebook"] : []);
+      if (facebookIsInMetaPlanner) await markPendingFacebookSchedulePublished(admin, item.id);
       outcomes.push({ id: item.id, published: result.published });
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : "Scheduled publishing failed.";

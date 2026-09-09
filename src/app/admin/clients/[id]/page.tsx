@@ -335,8 +335,8 @@ export default function ClientDetailPage() {
       ? data.results.filter((result: { ok: boolean }) => !result.ok).map((result: { platform: string; error: string }) => `${result.platform}: ${result.error}`).join(" ")
       : data.error;
     if (res.ok && data.published) {
-      setContent((items) => items.map((item) => item.id === adminSelected.id ? { ...item, status: "published" } : item));
-      setAdminSelected((item) => item ? { ...item, status: "published" } : null);
+      setContent((items) => items.map((item) => item.id === adminSelected.id ? { ...item, status: "published", publish_at: null, publish_started_at: null, publish_error: null } : item));
+      setAdminSelected((item) => item ? { ...item, status: "published", publish_at: null, publish_started_at: null, publish_error: null } : null);
       setPublishMessage(`Posted successfully to ${successful.join(" and ") || "the connected accounts"}.`);
     } else {
       const posted = successful.length ? `Posted successfully to ${successful.join(" and ")}. ` : "";
@@ -362,7 +362,9 @@ export default function ClientDetailPage() {
     if (res.ok && data.content?.publish_at) {
       setContent((items) => items.map((item) => item.id === adminSelected.id ? { ...item, publish_at: data.content.publish_at, publish_error: null } : item));
       setAdminSelected((item) => item ? { ...item, publish_at: data.content.publish_at, publish_error: null } : null);
-      setScheduleMessage("Queued for automatic publishing.");
+      setScheduleMessage(data.metaPlanner?.scheduled
+        ? "Queued for automatic publishing. Facebook is also scheduled in Meta Planner."
+        : `Queued for automatic publishing.${data.metaPlanner?.message ? ` ${data.metaPlanner.message}` : ""}`);
     } else {
       setScheduleMessage(data.error ?? "Unable to schedule this post.");
     }
