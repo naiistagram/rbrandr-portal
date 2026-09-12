@@ -47,6 +47,7 @@ export function FileViewer({
   const [saving, setSaving] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const swipeStartX = useRef<number | null>(null);
   const supabase = createClient();
 
   const currentFile = files[index] ?? "";
@@ -153,6 +154,19 @@ export function FileViewer({
     if (valid) setAnnotations((prev) => [...prev, currentAnn]);
     setCurrentAnn(null);
     setStartPct(null);
+  }
+
+  function onViewerTouchStart(e: React.TouchEvent) {
+    if (annotating) return;
+    swipeStartX.current = e.touches[0]?.clientX ?? null;
+  }
+
+  function onViewerTouchEnd(e: React.TouchEvent) {
+    if (annotating || swipeStartX.current === null) return;
+    const distance = (e.changedTouches[0]?.clientX ?? swipeStartX.current) - swipeStartX.current;
+    swipeStartX.current = null;
+    if (Math.abs(distance) < 50) return;
+    setIndex((current) => distance < 0 ? Math.min(files.length - 1, current + 1) : Math.max(0, current - 1));
   }
 
   // Touch support
@@ -353,7 +367,7 @@ export function FileViewer({
       </div>
 
       {/* Content area */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+      <div ref={containerRef} onTouchStart={onViewerTouchStart} onTouchEnd={onViewerTouchEnd} className="flex-1 relative overflow-hidden">
         {fileIsPDF ? (
           <iframe
             key={currentFile}

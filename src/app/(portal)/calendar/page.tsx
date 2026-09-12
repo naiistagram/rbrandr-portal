@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -65,6 +65,57 @@ const statusColors: Record<ContentStatus, string> = {
   rejected: "bg-red-400 text-zinc-900",
   published: "bg-[var(--accent)] text-white",
 };
+
+function ImageCarousel({ images, title, onOpen }: { images: string[]; title: string; onOpen: (index: number) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  function goTo(index: number) {
+    const track = trackRef.current;
+    if (!track) return;
+    track.scrollTo({ left: track.clientWidth * index, behavior: "smooth" });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div
+        ref={trackRef}
+        onScroll={(event) => {
+          const { scrollLeft, clientWidth } = event.currentTarget;
+          if (clientWidth > 0) setActiveIndex(Math.round(scrollLeft / clientWidth));
+        }}
+        className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth touch-pan-x rounded-xl [scrollbar-width:none]"
+      >
+        {images.map((url, index) => (
+          <button
+            key={url}
+            type="button"
+            onClick={() => onOpen(index)}
+            aria-label={`Open image ${index + 1} of ${images.length}`}
+            className="relative aspect-square w-full flex-none snap-start overflow-hidden bg-[var(--surface-2)] cursor-pointer group"
+          >
+            <img src={url} alt={`${title} creative ${index + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
+          </button>
+        ))}
+      </div>
+      {images.length > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <button type="button" onClick={() => goTo(Math.max(0, activeIndex - 1))} disabled={activeIndex === 0} aria-label="Previous image" className="p-1 text-[var(--foreground-muted)] hover:text-[var(--foreground)] disabled:opacity-30 transition-colors cursor-pointer">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="flex items-center gap-1.5" aria-label={`Image ${activeIndex + 1} of ${images.length}`}>
+            {images.map((_, index) => (
+              <button key={index} type="button" onClick={() => goTo(index)} aria-label={`Go to image ${index + 1}`} className={cn("h-1.5 rounded-full transition-all", index === activeIndex ? "w-5 bg-[var(--accent)]" : "w-1.5 bg-[var(--foreground-subtle)]/50 hover:bg-[var(--foreground-muted)]")} />
+            ))}
+          </div>
+          <button type="button" onClick={() => goTo(Math.min(images.length - 1, activeIndex + 1))} disabled={activeIndex === images.length - 1} aria-label="Next image" className="p-1 text-[var(--foreground-muted)] hover:text-[var(--foreground)] disabled:opacity-30 transition-colors cursor-pointer">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function CalendarPage() {
   const supabase = createClient();
@@ -302,13 +353,11 @@ export default function CalendarPage() {
               return (
                 <div className="space-y-2">
                   {images.length > 0 && (
-                    <div className={cn("grid gap-1.5", images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
-                      {images.map((url, i) => (
-                        <button key={url} onClick={() => openViewer(selected.file_urls!, selected.file_urls!.indexOf(url), selected.id)} className="relative aspect-square rounded-lg overflow-hidden bg-[var(--surface-2)] cursor-pointer group">
-                          <img src={url} alt={`Attachment ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                        </button>
-                      ))}
-                    </div>
+                    <ImageCarousel
+                      images={images}
+                      title={selected.title}
+                      onOpen={(index) => openViewer(selected.file_urls!, selected.file_urls!.indexOf(images[index]), selected.id)}
+                    />
                   )}
                   {pdfs.map((url) => (
                     <div key={url} className="rounded-lg overflow-hidden border border-[var(--border)]">
@@ -407,13 +456,11 @@ export default function CalendarPage() {
             {images.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-[var(--foreground-muted)] uppercase tracking-wider mb-4">Creative</p>
-                <div className={cn("grid gap-3", images.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
-                  {images.map((url, index) => (
-                    <button key={url} onClick={() => openViewer(selected.file_urls!, selected.file_urls!.indexOf(url), selected.id)} className="relative aspect-square rounded-xl overflow-hidden bg-[var(--surface-2)] border border-[var(--border)] group cursor-pointer">
-                      <img src={url} alt={`${selected.title} creative ${index + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                    </button>
-                  ))}
-                </div>
+                <ImageCarousel
+                  images={images}
+                  title={selected.title}
+                  onOpen={(index) => openViewer(selected.file_urls!, selected.file_urls!.indexOf(images[index]), selected.id)}
+                />
               </div>
             )}
           </div>

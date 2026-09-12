@@ -56,6 +56,16 @@ function isImageUrl(url: string) {
   return /\.(png|jpg|jpeg|gif|webp)/i.test(url) || (!url.includes(".pdf") && !url.includes(".zip"));
 }
 
+function sortContentByScheduledDate(items: ContentItem[]) {
+  return [...items].sort((a, b) => {
+    const dateOrder = (b.scheduled_date ?? "").localeCompare(a.scheduled_date ?? "");
+    if (dateOrder !== 0) return dateOrder;
+    const timeOrder = (b.scheduled_time ?? "").localeCompare(a.scheduled_time ?? "");
+    if (timeOrder !== 0) return timeOrder;
+    return b.created_at.localeCompare(a.created_at);
+  });
+}
+
 export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -94,6 +104,7 @@ export default function ClientDetailPage() {
   // Admin content filters
   const [adminContentStatus, setAdminContentStatus] = useState<"all" | ContentItem["status"]>("all");
   const [adminContentPlatform, setAdminContentPlatform] = useState<string>("all");
+  const [adminContentDate, setAdminContentDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [adminId, setAdminId] = useState("");
   const [ticketResponses, setTicketResponses] = useState<Record<string, string>>({});
@@ -261,7 +272,7 @@ export default function ClientDetailPage() {
         kpis: Array.isArray(data.project.kpis) ? (data.project.kpis as string[]) : [],
       });
     }
-    setContent(data.content ?? []);
+    setContent(sortContentByScheduledDate(data.content ?? []));
     setContracts(data.contracts ?? []);
     setReports(data.reports ?? []);
     setAssets(data.assets ?? []);
@@ -591,7 +602,7 @@ export default function ClientDetailPage() {
 
     const json = await res.json();
     if (!res.ok) { alert(`Failed to add content: ${json.error}`); setAddingContent(false); return; }
-    if (json.content) setContent((prev) => [json.content, ...prev]);
+    if (json.content) setContent((prev) => sortContentByScheduledDate([...prev, json.content]));
     setShowContentForm(false);
     setContentForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "", status: "draft", send_email: true });
     setContentFileUrls([]);
@@ -599,22 +610,27 @@ export default function ClientDetailPage() {
   }
 
   async function handleContentFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !project) return;
-    const isVideo = file.type.startsWith("video/");
-    const maxBytes = isVideo ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      alert(isVideo ? "Video too large. Maximum size is 500MB." : "File too large. Maximum size is 50MB.");
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0 || !project) return;
+    const oversizedFile = files.find((file) => file.size > (file.type.startsWith("video/") ? 500 * 1024 * 1024 : 50 * 1024 * 1024));
+    if (oversizedFile) {
+      alert(oversizedFile.type.startsWith("video/") ? "Video too large. Maximum size is 500MB." : "File too large. Maximum size is 50MB.");
       e.target.value = "";
       return;
     }
     setUploadingContentFile(true);
-    const path = `${project.id}/content-${Date.now()}-${file.name}`;
-    const { error } = await supabase.storage.from("assets").upload(path, file);
-    if (error) { setUploadingContentFile(false); return; }
-    const { data: { publicUrl } } = supabase.storage.from("assets").getPublicUrl(path);
-    setContentFileUrls((prev) => [...prev, publicUrl]);
+    const uploadedUrls: string[] = [];
+    const failedFiles: string[] = [];
+    for (const [index, file] of files.entries()) {
+      const path = `${project.id}/content-${Date.now()}-${index}-${file.name}`;
+      const { error } = await supabase.storage.from("assets").upload(path, file);
+      if (error) { failedFiles.push(file.name); continue; }
+      const { data: { publicUrl } } = supabase.storage.from("assets").getPublicUrl(path);
+      uploadedUrls.push(publicUrl);
+    }
+    if (uploadedUrls.length > 0) setContentFileUrls((prev) => [...prev, ...uploadedUrls]);
     setUploadingContentFile(false);
+    if (failedFiles.length > 0) alert(`Could not upload: ${failedFiles.join(", ")}`);
     if (contentFileRef.current) contentFileRef.current.value = "";
   }
 
@@ -955,7 +971,7 @@ export default function ClientDetailPage() {
       alert(`Failed to save date: ${error}`);
       return false;
     }
-    setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_date: newDate || null } : c));
+    setContent((prev) => sortContentByScheduledDate(prev.map((c) => c.id === itemId ? { ...c, scheduled_date: newDate || null } : c)));
     return true;
   }
 
@@ -970,7 +986,7 @@ export default function ClientDetailPage() {
       alert(`Failed to save time: ${error}`);
       return false;
     }
-    setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, scheduled_time: newTime || null } : c));
+    setContent((prev) => sortContentByScheduledDate(prev.map((c) => c.id === itemId ? { ...c, scheduled_time: newTime || null } : c)));
     return true;
   }
 
@@ -984,22 +1000,27 @@ export default function ClientDetailPage() {
   }
 
   async function handleEditFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !project) return;
-    const isVideo = file.type.startsWith("video/");
-    const maxBytes = isVideo ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
-    if (file.size > maxBytes) {
-      alert(isVideo ? "Video too large. Max 500MB." : "File too large. Max 50MB.");
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0 || !project) return;
+    const oversizedFile = files.find((file) => file.size > (file.type.startsWith("video/") ? 500 * 1024 * 1024 : 50 * 1024 * 1024));
+    if (oversizedFile) {
+      alert(oversizedFile.type.startsWith("video/") ? "Video too large. Max 500MB." : "File too large. Max 50MB.");
       e.target.value = "";
       return;
     }
     setUploadingEditFile(true);
-    const path = `${project.id}/content-${Date.now()}-${file.name}`;
-    const { error } = await supabase.storage.from("assets").upload(path, file);
-    if (error) { setUploadingEditFile(false); return; }
-    const { data: { publicUrl } } = supabase.storage.from("assets").getPublicUrl(path);
-    setAdminEditFileUrls((prev) => [...prev, publicUrl]);
+    const uploadedUrls: string[] = [];
+    const failedFiles: string[] = [];
+    for (const [index, file] of files.entries()) {
+      const path = `${project.id}/content-${Date.now()}-${index}-${file.name}`;
+      const { error } = await supabase.storage.from("assets").upload(path, file);
+      if (error) { failedFiles.push(file.name); continue; }
+      const { data: { publicUrl } } = supabase.storage.from("assets").getPublicUrl(path);
+      uploadedUrls.push(publicUrl);
+    }
+    if (uploadedUrls.length > 0) setAdminEditFileUrls((prev) => [...prev, ...uploadedUrls]);
     setUploadingEditFile(false);
+    if (failedFiles.length > 0) alert(`Could not upload: ${failedFiles.join(", ")}`);
     if (adminEditFileRef.current) adminEditFileRef.current.value = "";
   }
 
@@ -1765,6 +1786,26 @@ export default function ClientDetailPage() {
                       })}
                     </div>
                   )}
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div>
+                      <label className="text-[10px] font-medium uppercase tracking-wider text-[var(--foreground-subtle)] block mb-1">Scheduled date</label>
+                      <input
+                        type="date"
+                        value={adminContentDate}
+                        onChange={(e) => setAdminContentDate(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-xs text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all"
+                      />
+                    </div>
+                    {adminContentDate && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminContentDate("")}
+                        className="px-3 py-1.5 rounded-lg border border-[var(--border)] text-xs text-[var(--foreground-muted)] hover:text-[var(--foreground)] hover:bg-[var(--surface-2)] transition-all cursor-pointer"
+                      >
+                        Clear date
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })()}
@@ -1851,7 +1892,7 @@ export default function ClientDetailPage() {
                   </div>
                   <div>
                     <label className={labelClass}>Attachments (PDF, images, videos)</label>
-                    <input ref={contentFileRef} type="file" accept=".pdf,image/*,video/*" onChange={handleContentFileUpload} className="hidden" />
+                    <input ref={contentFileRef} type="file" accept=".pdf,image/*,video/*" multiple onChange={handleContentFileUpload} className="hidden" />
                     <button
                       type="button"
                       onClick={() => contentFileRef.current?.click()}
@@ -1859,7 +1900,7 @@ export default function ClientDetailPage() {
                       className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-dashed border-[var(--border)] text-[var(--foreground-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer disabled:opacity-50"
                     >
                       <Upload className="w-3.5 h-3.5" />
-                      {uploadingContentFile ? "Uploading…" : "Attach file"}
+                      {uploadingContentFile ? "Uploading…" : "Attach files"}
                     </button>
                     {contentFileUrls.length > 0 && (
                       <div className="mt-2 space-y-1">
@@ -1891,10 +1932,11 @@ export default function ClientDetailPage() {
 
             {/* Card grid grouped by platform */}
             {content.length > 0 && (() => {
-              const filtered = content.filter((i) =>
+              const filtered = sortContentByScheduledDate(content.filter((i) =>
                 (adminContentStatus === "all" || i.status === adminContentStatus) &&
-                (adminContentPlatform === "all" || i.platforms.includes(adminContentPlatform))
-              );
+                (adminContentPlatform === "all" || i.platforms.includes(adminContentPlatform)) &&
+                (!adminContentDate || i.scheduled_date === adminContentDate)
+              ));
               const grouped: Record<string, ContentItem[]> = {};
               for (const p of PLATFORM_ORDER) {
                 const g = filtered.filter((i) => i.platforms.includes(p));
@@ -2179,6 +2221,7 @@ export default function ClientDetailPage() {
                         ref={adminEditFileRef}
                         type="file"
                         accept=".pdf,image/*,video/*"
+                        multiple
                         onChange={handleEditFileUpload}
                         className="hidden"
                       />
@@ -2189,7 +2232,7 @@ export default function ClientDetailPage() {
                         className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--border)] text-xs text-[var(--foreground-muted)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all cursor-pointer w-full justify-center disabled:opacity-50"
                       >
                         <Upload className="w-3.5 h-3.5" />
-                        {uploadingEditFile ? "Uploading…" : "Upload file"}
+                        {uploadingEditFile ? "Uploading…" : "Upload files"}
                       </button>
                       {adminEditFileUrls.length > 0 && (
                         <div className="space-y-1.5">
