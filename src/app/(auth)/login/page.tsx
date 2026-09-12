@@ -34,17 +34,9 @@ export default function LoginPage() {
       return;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .single();
-
-    if (profile?.role === "admin") {
-      router.push("/admin/dashboard");
-    } else {
-      router.push("/dashboard");
-    }
+    // The MFA page decides whether this is a first-time enrollment or an
+    // authenticator challenge. It also promotes the session to AAL2.
+    router.replace("/mfa");
   }
 
   return (
