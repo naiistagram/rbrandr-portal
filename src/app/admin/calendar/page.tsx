@@ -7,6 +7,9 @@ type CalendarContent = {
   id: string;
   project_id: string;
   title: string;
+  content_type: string;
+  description: string | null;
+  file_urls: string[] | null;
   platforms: string[];
   status: "draft" | "in_review" | "approved" | "rejected" | "published";
   scheduled_date: string | null;
@@ -23,7 +26,7 @@ export default async function AdminCalendarPage() {
   const [{ data: content, error: contentError }, { data: connections, error: connectionsError }] = await Promise.all([
     admin
       .from("content_items")
-      .select("id, project_id, title, platforms, status, scheduled_date, scheduled_time, publish_at, publish_error, projects(client_id, name, profiles(full_name, company_name))")
+      .select("id, project_id, title, content_type, description, file_urls, platforms, status, scheduled_date, scheduled_time, publish_at, publish_error, projects(client_id, name, profiles(full_name, company_name))")
       .not("scheduled_date", "is", null)
       .order("scheduled_date", { ascending: true }),
     admin.from("social_connections").select("project_id, platform, account_name").order("platform"),

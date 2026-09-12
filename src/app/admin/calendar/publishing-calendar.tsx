@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from "date-fns";
-import { CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink, Radio, Send } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink, ImageIcon, Radio, Send } from "lucide-react";
 import { cn, formatTime, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG } from "@/lib/content-display";
 
@@ -11,6 +11,9 @@ type CalendarContent = {
   id: string;
   project_id: string;
   title: string;
+  content_type: string;
+  description: string | null;
+  file_urls: string[] | null;
   platforms: string[];
   status: keyof typeof STATUS_CONFIG;
   scheduled_date: string | null;
@@ -26,6 +29,12 @@ const PUBLISHABLE_PLATFORMS = new Set(["Facebook", "Instagram", "LinkedIn"]);
 
 function clientName(item: CalendarContent) {
   return item.projects?.profiles?.company_name ?? item.projects?.profiles?.full_name ?? item.projects?.name ?? "Client";
+}
+
+function clientColour(client: string) {
+  let hash = 0;
+  for (let index = 0; index < client.length; index += 1) hash = (hash * 31 + client.charCodeAt(index)) | 0;
+  return `hsl(${Math.abs(hash) % 360} 72% 56%)`;
 }
 
 function calendarDate(date: string) {
@@ -104,6 +113,10 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
               </select>
             </label>
           </div>
+          <div className="flex flex-wrap gap-x-3 gap-y-2 border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground-subtle)]">Client key</span>
+            {clients.map((client) => <span key={client} className="inline-flex items-center gap-1.5 text-xs text-[var(--foreground-muted)]"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: clientColour(client) }} />{client}</span>)}
+          </div>
 
           <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--surface-2)]">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => <div key={day} className="px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground-subtle)]">{day}</div>)}
@@ -114,7 +127,8 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
               return <div key={day.toISOString()} className={cn("min-h-30 border-b border-r border-[var(--border)] p-1.5 sm:min-h-36 sm:p-2", !isSameMonth(day, month) && "bg-[var(--surface-2)]/50")}>
                 <p className={cn("mb-1 text-xs font-medium", isSameMonth(day, month) ? "text-[var(--foreground-muted)]" : "text-[var(--foreground-subtle)]")}>{format(day, "d")}</p>
                 <div className="space-y-1">
-                  {dayItems.slice(0, 3).map((item) => <button key={item.id} onClick={() => setSelected(item)} className={cn("block w-full rounded-md border px-1.5 py-1 text-left transition-colors hover:brightness-125", STATUS_CONFIG[item.status].bg, "border-white/5")}>
+                  {dayItems.slice(0, 3).map((item) => <button key={item.id} onClick={() => setSelected(item)} style={{ borderLeftColor: clientColour(clientName(item)) }} className={cn("block w-full border border-l-[3px] rounded-md px-1.5 py-1 text-left transition-colors hover:brightness-125", STATUS_CONFIG[item.status].bg, "border-white/5")}>
+                    <p className="truncate text-[9px] font-medium text-[var(--foreground-muted)]">{clientName(item)}</p>
                     <p className="truncate text-[10px] font-semibold text-[var(--foreground)]">{item.title}</p>
                     <div className="mt-1 flex items-center gap-1">{item.platforms.filter((platform) => PUBLISHABLE_PLATFORMS.has(platform)).slice(0, 3).map((platform) => <span title={platform} key={platform} className={cn("h-1.5 w-1.5 rounded-full", PLATFORM_CONFIG[platform]?.dot ?? "bg-zinc-400")} />)}</div>
                   </button>)}
@@ -147,6 +161,12 @@ function DetailPanel({ item, channels, onClose }: { item: CalendarContent; chann
       <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[var(--accent)]">{clientName(item)}</p><h2 className="mt-1 text-lg font-bold text-[var(--foreground)]">{item.title}</h2></div><button onClick={onClose} className="rounded-md p-2 text-[var(--foreground-muted)] hover:bg-[var(--surface-2)]">×</button></div>
       <div className="mt-5 space-y-4 text-sm">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3"><p className="text-xs text-[var(--foreground-muted)]">Content plan</p><p className="mt-1 font-medium text-[var(--foreground)]">{item.scheduled_date ? format(calendarDate(item.scheduled_date), "EEE d MMMM") : "No planned date"}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}</p></div>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
+          <div className="flex items-center justify-between gap-3"><p className="text-xs text-[var(--foreground-muted)]">Post preview</p><span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium capitalize text-[var(--foreground-muted)]">{item.content_type}</span></div>
+          {item.description ? <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--foreground)]">{item.description}</p> : <p className="mt-2 text-sm text-[var(--foreground-subtle)]">No post copy added.</p>}
+          {(item.file_urls?.length ?? 0) > 0 && <div className="mt-3 grid grid-cols-2 gap-2">{item.file_urls!.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="group relative aspect-square overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)]"><img src={url} alt={`${item.title} media ${index + 1}`} className="h-full w-full object-cover transition-transform group-hover:scale-105" /><span className="absolute inset-x-0 bottom-0 bg-black/60 px-2 py-1 text-[10px] text-white">Open media</span></a>)}</div>}
+          {(item.file_urls?.length ?? 0) === 0 && <div className="mt-3 flex items-center gap-2 text-xs text-[var(--foreground-subtle)]"><ImageIcon className="h-3.5 w-3.5" />No media attached</div>}
+        </div>
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3"><p className="text-xs text-[var(--foreground-muted)]">Publishing status</p><p className={cn("mt-1 font-semibold", STATUS_CONFIG[item.status].color)}>{item.status === "approved" && item.publish_at ? "Scheduled to publish" : STATUS_CONFIG[item.status].label}</p>{item.publish_at && <p className="mt-1 text-xs text-[var(--foreground-muted)]">Publishing automatically at {format(new Date(item.publish_at), "d MMM, HH:mm")} UK time</p>}{item.publish_error && <p className="mt-1 text-xs text-red-300">Last publish attempt: {item.publish_error}</p>}</div>
         <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">Channels</p><div className="mt-2 space-y-2">{item.platforms.map((platform) => { const account = connected.get(platform as Connection["platform"]); const publishable = PUBLISHABLE_PLATFORMS.has(platform); return <div key={platform} className="flex items-center justify-between rounded-lg border border-[var(--border)] px-3 py-2"><span className="flex items-center gap-2 text-sm font-medium text-[var(--foreground)]"><span className={cn("h-2 w-2 rounded-full", PLATFORM_CONFIG[platform]?.dot ?? "bg-zinc-400")} />{platform}</span>{publishable ? account ? <span className="text-xs text-emerald-400">Connected · {account.account_name}</span> : <span className="text-xs text-amber-300">Not connected</span> : <span className="text-xs text-[var(--foreground-subtle)]">No direct publishing</span>}</div>; })}</div></div>
       </div>
