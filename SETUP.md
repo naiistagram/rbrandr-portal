@@ -133,3 +133,11 @@ The client will see it in their Contracts page and can sign digitally.
 
 Supabase free tier supports 500MB DB + 1GB storage — enough for ~10 clients.
 When you scale up, Supabase Pro is $25/month.
+
+## Multi-factor authentication
+
+The portal requires an authenticator-app code for every user. In Supabase,
+open **Authentication → Multi-Factor Authentication** and enable **App
+Authenticator (TOTP)**. Then run `supabase-mfa-migration.sql` in the SQL
+Editor. On the next sign-in, every existing user will be guided through setup;
+future sign-ins require their six-digit authenticator code.

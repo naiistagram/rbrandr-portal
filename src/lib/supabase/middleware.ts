@@ -1,5 +1,11 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { getMfaStatus } from "@/lib/supabase/mfa";
+
+function withSessionCookies(response: NextResponse, sessionResponse: NextResponse) {
+  sessionResponse.cookies.getAll().forEach((cookie) => response.cookies.set(cookie));
+  return response;
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -40,8 +46,10 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isMfaRoute = pathname.startsWith("/mfa");
   const isPublicRoute =
     isAuthRoute ||
+    isMfaRoute ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/forgot-password") ||
     pathname.startsWith("/reset-password");
@@ -49,13 +57,30 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isPublicRoute && pathname !== "/") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return withSessionCookies(NextResponse.redirect(url), supabaseResponse);
+  }
+
+  if (user && !isPublicRoute && pathname !== "/") {
+    const mfaStatus = await getMfaStatus(supabase);
+    if (mfaStatus.requiresMfa) {
+      if (pathname.startsWith("/api/")) {
+        return withSessionCookies(
+          NextResponse.json({ error: "Two-factor authentication is required." }, { status: 401 }),
+          supabaseResponse
+        );
+      }
+
+      const url = request.nextUrl.clone();
+      url.pathname = "/mfa";
+      return withSessionCookies(NextResponse.redirect(url), supabaseResponse);
+    }
   }
 
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    const mfaStatus = await getMfaStatus(supabase);
+    url.pathname = mfaStatus.requiresMfa ? "/mfa" : "/dashboard";
+    return withSessionCookies(NextResponse.redirect(url), supabaseResponse);
   }
 
   return supabaseResponse;
