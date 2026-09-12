@@ -147,12 +147,13 @@ export default function ClientDetailPage() {
   const [showContentForm, setShowContentForm] = useState(false);
   const [contentForm, setContentForm] = useState({
     title: "", content_type: "post" as ContentItem["content_type"], platforms: [] as string[],
-    description: "", scheduled_date: "", scheduled_time: "", status: "draft" as ContentItem["status"],
+    description: "", scheduled_date: "", scheduled_time: "", status: "draft" as ContentItem["status"], send_email: true,
   });
   const [addingContent, setAddingContent] = useState(false);
   const contentFileRef = useRef<HTMLInputElement>(null);
   const [contentFileUrls, setContentFileUrls] = useState<string[]>([]);
   const [uploadingContentFile, setUploadingContentFile] = useState(false);
+  const [sendStatusEmail, setSendStatusEmail] = useState(true);
 
   // Asset upload
   const assetRef = useRef<HTMLInputElement>(null);
@@ -582,6 +583,7 @@ export default function ClientDetailPage() {
         scheduled_date: contentForm.scheduled_date || null,
         scheduled_time: contentForm.scheduled_time || null,
         status: contentForm.status,
+        send_email: contentForm.send_email,
         created_by: adminId,
         file_urls: contentFileUrls.length > 0 ? contentFileUrls : null,
       }),
@@ -591,7 +593,7 @@ export default function ClientDetailPage() {
     if (!res.ok) { alert(`Failed to add content: ${json.error}`); setAddingContent(false); return; }
     if (json.content) setContent((prev) => [json.content, ...prev]);
     setShowContentForm(false);
-    setContentForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "", status: "draft" });
+    setContentForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "", status: "draft", send_email: true });
     setContentFileUrls([]);
     setAddingContent(false);
   }
@@ -931,11 +933,11 @@ export default function ClientDetailPage() {
     }
   }
 
-  async function handleUpdateContentStatus(itemId: string, newStatus: ContentItem["status"]) {
+  async function handleUpdateContentStatus(itemId: string, newStatus: ContentItem["status"], sendEmail = true) {
     const res = await fetch("/api/admin/content-status", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId, status: newStatus, clientId }),
+      body: JSON.stringify({ itemId, status: newStatus, clientId, send_email: sendEmail }),
     });
     if (res.ok) {
       setContent((prev) => prev.map((c) => c.id === itemId ? { ...c, status: newStatus } : c));
@@ -978,6 +980,7 @@ export default function ClientDetailPage() {
     setAdminEditDesc(item.description ?? "");
     setAdminEditFileUrls(item.file_urls ?? []);
     setAdminEditPlatforms(item.platforms);
+    setSendStatusEmail(true);
   }
 
   async function handleEditFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1830,6 +1833,18 @@ export default function ClientDetailPage() {
                       </select>
                     </div>
                   </div>
+                  <label className="flex items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-xs cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={contentForm.send_email}
+                      onChange={(e) => setContentForm((f) => ({ ...f, send_email: e.target.checked }))}
+                      className="mt-0.5 accent-[var(--accent)]"
+                    />
+                    <span>
+                      <span className="font-medium text-[var(--foreground)]">Send email notification</span>
+                      <span className="block mt-0.5 text-[var(--foreground-subtle)]">Used when this item is added as In Review, Approved, or Published.</span>
+                    </span>
+                  </label>
                   <div>
                     <label className={labelClass}>Caption / Description</label>
                     <textarea rows={8} value={contentForm.description} onChange={(e) => setContentForm((f) => ({ ...f, description: e.target.value }))} placeholder="Write the full caption, hashtags, or notes..." className={`${inputClass} min-h-48 resize-y leading-relaxed`} />
@@ -2041,7 +2056,7 @@ export default function ClientDetailPage() {
                       <select
                         value={adminSelected.status}
                         onChange={(e) => {
-                          handleUpdateContentStatus(adminSelected.id, e.target.value as ContentItem["status"]);
+                          handleUpdateContentStatus(adminSelected.id, e.target.value as ContentItem["status"], sendStatusEmail);
                           setAdminSelected((p) => p ? { ...p, status: e.target.value as ContentItem["status"] } : null);
                         }}
                         className={inputClass}
@@ -2053,6 +2068,18 @@ export default function ClientDetailPage() {
                         <option value="published">Published</option>
                       </select>
                     </div>
+                    <label className="flex items-start gap-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={sendStatusEmail}
+                        onChange={(e) => setSendStatusEmail(e.target.checked)}
+                        className="mt-0.5 accent-[var(--accent)]"
+                      />
+                      <span>
+                        <span className="font-medium text-[var(--foreground)]">Send email notification</span>
+                        <span className="block mt-0.5 text-[var(--foreground-subtle)]">Used when changing the status to In Review, Approved, or Published.</span>
+                      </span>
+                    </label>
                     {adminSelected.status === "approved" && (
                       <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-3">
                         <div className="flex items-center justify-between gap-3">

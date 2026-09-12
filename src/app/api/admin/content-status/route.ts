@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest) {
   const admin = await verifyAdmin();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { itemId, status, scheduledDate, scheduledTime, clientId } = await request.json();
+  const { itemId, status, scheduledDate, scheduledTime, clientId, send_email } = await request.json();
   if (!itemId) return NextResponse.json({ error: "itemId required" }, { status: 400 });
 
   const updates: Record<string, string | null> = {};
@@ -77,7 +77,7 @@ export async function PATCH(request: NextRequest) {
     });
   }
 
-  if (status === "in_review" || status === "approved" || status === "published") {
+  if (send_email !== false && (status === "in_review" || status === "approved" || status === "published")) {
     await sendContentStatusEmail(item.project_id, item.title, status);
   }
 

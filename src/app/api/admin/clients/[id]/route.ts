@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { action } = body;
 
   if (action === "add_content") {
-    const { project_id, title, content_type, platforms, description, scheduled_date, scheduled_time, status, file_urls, created_by } = body;
+    const { project_id, title, content_type, platforms, description, scheduled_date, scheduled_time, status, file_urls, created_by, send_email } = body;
     if (!project_id || !title) return NextResponse.json({ error: "project_id and title required" }, { status: 400 });
 
     const { data, error } = await auth.admin.from("content_items").insert({
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // The status dropdown on this form lets an admin create content directly
     // as "in_review" — without this, only the separate quick-status dropdown
     // on an existing item triggered the "ready for review" email.
-    if (data.status === "in_review" || data.status === "approved" || data.status === "published") {
+    if (send_email !== false && (data.status === "in_review" || data.status === "approved" || data.status === "published")) {
       await sendContentStatusEmail(data.project_id, data.title, data.status);
     }
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   if (action === "update_content") {
-    const { content_id, description, file_urls, status, scheduled_date, scheduled_time, platforms } = body;
+    const { content_id, description, file_urls, status, scheduled_date, scheduled_time, platforms, send_email } = body;
     if (!content_id) return NextResponse.json({ error: "content_id required" }, { status: 400 });
 
     const updates: Record<string, unknown> = {};
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
 
-    if (status === "in_review" || status === "approved" || status === "published") {
+    if (send_email !== false && (status === "in_review" || status === "approved" || status === "published")) {
       await sendContentStatusEmail(data.project_id, data.title, status);
     }
 
