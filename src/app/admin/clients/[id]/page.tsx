@@ -56,6 +56,10 @@ function isImageUrl(url: string) {
   return /\.(png|jpg|jpeg|gif|webp)/i.test(url) || (!url.includes(".pdf") && !url.includes(".zip"));
 }
 
+function isPdfUrl(url: string) {
+  return /\.pdf($|[?#])/i.test(url);
+}
+
 function sortContentByScheduledDate(items: ContentItem[]) {
   return [...items].sort((a, b) => {
     const dateOrder = (b.scheduled_date ?? "").localeCompare(a.scheduled_date ?? "");
@@ -1974,7 +1978,12 @@ export default function ClientDetailPage() {
                                 className="group text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:border-zinc-600 transition-all w-full"
                               >
                                 <div className={cn("relative aspect-[4/3] bg-[var(--surface-2)] flex items-center justify-center overflow-hidden", !thumb && platCfg ? `bg-gradient-to-br ${platCfg.bg}` : "")}>
-                                  {thumb ? (
+                                  {thumb && isPdfUrl(thumb) ? (
+                                    <div className="flex flex-col items-center gap-2 text-red-300">
+                                      <FileText className="w-10 h-10" />
+                                      <span className="text-xs font-semibold uppercase tracking-wider">PDF document</span>
+                                    </div>
+                                  ) : thumb ? (
                                     <img src={thumb} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                                   ) : (
                                     <CIcon className="w-8 h-8 text-[var(--foreground-subtle)] opacity-40" />
@@ -2040,6 +2049,12 @@ export default function ClientDetailPage() {
                     <>
                       {/\.(mp4|mov|webm|ogg|avi)$/i.test(media[adminMediaIndex]) ? (
                         <video src={media[adminMediaIndex]} controls className="max-w-full max-h-[480px]" />
+                      ) : isPdfUrl(media[adminMediaIndex]) ? (
+                        <iframe
+                          src={`${media[adminMediaIndex]}#toolbar=0&navpanes=0`}
+                          title={`${adminSelected.title} PDF preview`}
+                          className="w-full h-[480px] border-0 bg-white"
+                        />
                       ) : isImageUrl(media[adminMediaIndex]) ? (
                         <img src={media[adminMediaIndex]} alt={adminSelected.title} className="max-w-full max-h-[480px] object-contain" />
                       ) : (
