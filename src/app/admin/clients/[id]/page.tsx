@@ -613,6 +613,45 @@ export default function ClientDetailPage() {
     setAddingContent(false);
   }
 
+  async function uploadContentAttachment(file: File): Promise<{ publicUrl: string } | { error: string }> {
+    if (!project) return { error: "No project is selected." };
+
+    try {
+      const prepareResponse = await fetch("/api/admin/content-attachments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          fileName: file.name,
+          contentType: file.type,
+          fileSize: file.size,
+        }),
+      });
+      const prepared = await prepareResponse.json().catch(() => ({})) as {
+        error?: string;
+        path?: string;
+        token?: string;
+        publicUrl?: string;
+      };
+
+      if (!prepareResponse.ok || !prepared.path || !prepared.token || !prepared.publicUrl) {
+        return { error: prepared.error ?? "Could not prepare the attachment upload." };
+      }
+
+      const { error } = await supabase.storage.from("assets").uploadToSignedUrl(
+        prepared.path,
+        prepared.token,
+        file,
+        { contentType: file.type || undefined }
+      );
+      if (error) return { error: error.message };
+
+      return { publicUrl: prepared.publicUrl };
+    } catch {
+      return { error: "Network error while uploading the attachment." };
+    }
+  }
+
   async function handleContentFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (files.length === 0 || !project) return;
@@ -625,16 +664,14 @@ export default function ClientDetailPage() {
     setUploadingContentFile(true);
     const uploadedUrls: string[] = [];
     const failedFiles: string[] = [];
-    for (const [index, file] of files.entries()) {
-      const path = `${project.id}/content-${Date.now()}-${index}-${file.name}`;
-      const { error } = await supabase.storage.from("assets").upload(path, file);
-      if (error) { failedFiles.push(file.name); continue; }
-      const { data: { publicUrl } } = supabase.storage.from("assets").getPublicUrl(path);
-      uploadedUrls.push(publicUrl);
+    for (const file of files) {
+      const result = await uploadContentAttachment(file);
+      if ("error" in result) { failedFiles.push(`${file.name} — ${result.error}`); continue; }
+      uploadedUrls.push(result.publicUrl);
     }
     if (uploadedUrls.length > 0) setContentFileUrls((prev) => [...prev, ...uploadedUrls]);
     setUploadingContentFile(false);
-    if (failedFiles.length > 0) alert(`Could not upload: ${failedFiles.join(", ")}`);
+    if (failedFiles.length > 0) alert(`Could not upload:\n${failedFiles.join("\n")}`);
     if (contentFileRef.current) contentFileRef.current.value = "";
   }
 
@@ -1015,16 +1052,14 @@ export default function ClientDetailPage() {
     setUploadingEditFile(true);
     const uploadedUrls: string[] = [];
     const failedFiles: string[] = [];
-    for (const [index, file] of files.entries()) {
-      const path = `${project.id}/content-${Date.now()}-${index}-${file.name}`;
-      const { error } = await supabase.storage.from("assets").upload(path, file);
-      if (error) { failedFiles.push(file.name); continue; }
-      const { data: { publicUrl } } = supabase.storage.from("assets").getPublicUrl(path);
-      uploadedUrls.push(publicUrl);
+    for (const file of files) {
+      const result = await uploadContentAttachment(file);
+      if ("error" in result) { failedFiles.push(`${file.name} — ${result.error}`); continue; }
+      uploadedUrls.push(result.publicUrl);
     }
     if (uploadedUrls.length > 0) setAdminEditFileUrls((prev) => [...prev, ...uploadedUrls]);
     setUploadingEditFile(false);
-    if (failedFiles.length > 0) alert(`Could not upload: ${failedFiles.join(", ")}`);
+    if (failedFiles.length > 0) alert(`Could not upload:\n${failedFiles.join("\n")}`);
     if (adminEditFileRef.current) adminEditFileRef.current.value = "";
   }
 
