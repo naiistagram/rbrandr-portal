@@ -54,7 +54,7 @@ export interface ContentItem {
   project_id: string;
   title: string;
   description: string | null;
-  content_type: "post" | "story" | "reel" | "ad" | "email" | "blog" | "other";
+  content_type: "post" | "story" | "reel" | "carousel" | "ad" | "email" | "blog" | "other";
   platforms: string[];
   status: "draft" | "in_review" | "approved" | "rejected" | "published";
   scheduled_date: string | null;

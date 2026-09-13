@@ -37,7 +37,7 @@ The source of truth is `supabase-schema.sql`. As of the current schema:
 | `project_id` | uuid NOT NULL | FK → projects |
 | `title` | text NOT NULL | |
 | `description` | text | nullable |
-| `content_type` | text NOT NULL | enum: `post\|story\|reel\|ad\|email\|blog\|other` |
+| `content_type` | text NOT NULL | enum: `post\|story\|reel\|carousel\|ad\|email\|blog\|other` |
 | `platform` | text | nullable, single value |
 | `status` | text NOT NULL | enum: `draft\|in_review\|approved\|rejected\|published` |
 | `scheduled_date` | date | nullable |

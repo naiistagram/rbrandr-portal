@@ -21,7 +21,7 @@ import type {
   Asset, Document as Doc, Milestone as MS, Ticket, Form, Feedback,
 } from "@/lib/supabase/types";
 
-const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"] as const;
+const CONTENT_TYPES = ["post", "story", "reel", "carousel", "ad", "email", "blog", "other"] as const;
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
 const SERVICE_TYPES = [
   { value: "social_media", label: "Social Media" },

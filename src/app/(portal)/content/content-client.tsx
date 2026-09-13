@@ -28,7 +28,7 @@ import type { ContentItem } from "@/lib/supabase/types";
 import { createClient } from "@/lib/supabase/client";
 
 type FilterStatus = "all" | ContentItem["status"];
-const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"] as const;
+const CONTENT_TYPES = ["post", "story", "reel", "carousel", "ad", "email", "blog", "other"] as const;
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
 
 function isPdfUrl(url: string) {

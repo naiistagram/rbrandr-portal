@@ -47,7 +47,7 @@ type ContentStatus = ContentItem["status"];
 type CalView = "month" | "week" | "list";
 
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
-const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"] as const;
+const CONTENT_TYPES = ["post", "story", "reel", "carousel", "ad", "email", "blog", "other"] as const;
 
 type NewContentForm = {
   title: string;

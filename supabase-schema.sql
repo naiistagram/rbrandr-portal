@@ -140,7 +140,7 @@ create table public.content_items (
   project_id uuid references public.projects(id) on delete cascade not null,
   title text not null,
   description text,
-  content_type text not null default 'post' check (content_type in ('post', 'story', 'reel', 'ad', 'email', 'blog', 'other')),
+  content_type text not null default 'post' check (content_type in ('post', 'story', 'reel', 'carousel', 'ad', 'email', 'blog', 'other')),
   platform text,
   status text not null default 'draft' check (status in ('draft', 'in_review', 'approved', 'rejected', 'published')),
   scheduled_date date,

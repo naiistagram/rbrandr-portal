@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendContentStatusEmail } from "@/lib/email";
 
-const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"];
+const CONTENT_TYPES = ["post", "story", "reel", "carousel", "ad", "email", "blog", "other"];
 
 async function verifyAdmin() {
   const supabase = await createClient();
