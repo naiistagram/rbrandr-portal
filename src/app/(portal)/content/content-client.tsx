@@ -31,6 +31,25 @@ type FilterStatus = "all" | ContentItem["status"];
 const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"] as const;
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
 
+function isPdfUrl(url: string) {
+  return /\.pdf($|[?#])/i.test(url);
+}
+
+function contentDate(item: ContentItem) {
+  return item.scheduled_date ?? item.created_at.slice(0, 10);
+}
+
+function contentMonth(item: ContentItem) {
+  return contentDate(item).slice(0, 7);
+}
+
+function formatMonth(month: string) {
+  return new Date(`${month}-01T12:00:00`).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 interface Props {
   initialItems: ContentItem[];
   initialProjectId: string | null;
@@ -45,6 +64,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
   const [platformFilter, setPlatformFilter] = useState<string>("all");
+  const [publishedMonthFilter, setPublishedMonthFilter] = useState("");
   const [projectId] = useState<string | null>(initialProjectId);
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -95,8 +115,13 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
       item.platforms.some((p) => p.toLowerCase().includes(search.toLowerCase()));
     const matchStatus = statusFilter === "all" || item.status === statusFilter;
     const matchPlatform = platformFilter === "all" || item.platforms.includes(platformFilter);
-    return matchSearch && matchStatus && matchPlatform;
+    const matchPublishedMonth = statusFilter !== "published" || !publishedMonthFilter || contentMonth(item) === publishedMonthFilter;
+    return matchSearch && matchStatus && matchPlatform && matchPublishedMonth;
   });
+
+  const publishedMonths = Array.from(new Set(
+    items.filter((item) => item.status === "published").map(contentMonth)
+  )).sort((a, b) => b.localeCompare(a));
 
   const counts = {
     all: items.length,
@@ -112,13 +137,17 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
     platformCounts[p] = items.filter((i) => i.platforms.includes(p)).length;
   }
 
-  // A multi-platform item appears once per platform section it's tagged with.
+  // When a platform is selected, show its matching posts at the top without
+  // duplicating multi-platform posts under the other headings.
   const grouped: Record<string, ContentItem[]> = {};
-  for (const p of PLATFORM_ORDER) {
+  const groupPlatforms = platformFilter === "all" ? PLATFORM_ORDER : [platformFilter];
+  for (const p of groupPlatforms) {
     const g = filtered.filter((i) => i.platforms.includes(p));
     if (g.length) grouped[p] = g;
   }
-  const other = filtered.filter((i) => i.platforms.length === 0 || i.platforms.every((p) => !PLATFORM_ORDER.includes(p)));
+  const other = platformFilter === "all"
+    ? filtered.filter((i) => i.platforms.length === 0 || i.platforms.every((p) => !PLATFORM_ORDER.includes(p)))
+    : [];
   if (other.length) grouped["Other"] = other;
 
   async function handleCreateContent(e: React.FormEvent) {
@@ -205,6 +234,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
     const Icon = contentIcon(item.content_type);
     const thumb = item.file_urls?.[0];
     const firstPlatCfg = item.platforms[0] ? PLATFORM_CONFIG[item.platforms[0]] : null;
+    const displayDate = contentDate(item);
 
     return (
       <button
@@ -218,7 +248,19 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
           "relative aspect-[4/3] bg-[var(--surface-2)] flex items-center justify-center overflow-hidden",
           !thumb && firstPlatCfg ? `bg-gradient-to-br ${firstPlatCfg.bg}` : ""
         )}>
-          {thumb ? (
+          {thumb && isPdfUrl(thumb) ? (
+            <>
+              <iframe
+                src={`${thumb}#page=1&view=FitH&toolbar=0&navpanes=0`}
+                title={`${item.title} first page preview`}
+                className="pointer-events-none h-full w-full border-0 bg-white"
+              />
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 text-xs font-semibold text-white">
+                <FileText className="h-3.5 w-3.5" />
+                PDF document
+              </div>
+            </>
+          ) : thumb ? (
             <img
               src={thumb}
               alt={item.title}
@@ -265,9 +307,9 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
               );
             })}
           </div>
-          {item.scheduled_date && (
+          {displayDate && (
             <p className="text-[10px] text-[var(--foreground-subtle)]">
-              {formatDate(item.scheduled_date)}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}
+              {item.status === "published" ? "Posted" : "Scheduled"}: {formatDate(displayDate)}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}
             </p>
           )}
         </div>
@@ -310,7 +352,10 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
             {statuses.map((s) => (
               <button
                 key={s}
-                onClick={() => setStatusFilter(s)}
+                onClick={() => {
+                  setStatusFilter(s);
+                  if (s !== "published") setPublishedMonthFilter("");
+                }}
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer flex items-center gap-1.5",
                   s === "in_review" && "review-status-laser",
@@ -360,6 +405,24 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
           })}
         </div>
 
+        {statusFilter === "published" && publishedMonths.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+            <label htmlFor="published-month" className="text-xs font-medium text-[var(--foreground-muted)]">Posted in</label>
+            <select
+              id="published-month"
+              value={publishedMonthFilter}
+              onChange={(e) => setPublishedMonthFilter(e.target.value)}
+              className="min-w-44 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
+            >
+              <option value="">All published months</option>
+              {publishedMonths.map((month) => <option key={month} value={month}>{formatMonth(month)}</option>)}
+            </select>
+            <span className="text-xs text-[var(--foreground-subtle)]">
+              {publishedMonthFilter ? `Showing ${formatMonth(publishedMonthFilter)}` : "Choose a month to review published content"}
+            </span>
+          </div>
+        )}
+
         {/* Stats row */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {(["draft", "in_review", "approved", "rejected", "published"] as const).map((s) => {
@@ -368,7 +431,11 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
               <Card
                 key={s}
                 className={cn("py-3 px-4 cursor-pointer", s === "in_review" && "review-status-laser")}
-                onClick={() => setStatusFilter(statusFilter === s ? "all" : s)}
+                onClick={() => {
+                  const nextStatus = statusFilter === s ? "all" : s;
+                  setStatusFilter(nextStatus);
+                  if (nextStatus !== "published") setPublishedMonthFilter("");
+                }}
               >
                 <p className="text-2xl font-bold text-[var(--foreground)]">{counts[s]}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -618,9 +685,9 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
                 {/* Title & date */}
                 <div>
                   <h4 className="text-base font-bold text-[var(--foreground)] leading-tight">{selected.title}</h4>
-                  {selected.scheduled_date && (
+                  {contentDate(selected) && (
                     <p className="text-xs text-[var(--foreground-subtle)] mt-1">
-                      Scheduled: {formatDate(selected.scheduled_date)}{selected.scheduled_time ? ` at ${formatTime(selected.scheduled_time)}` : ""}
+                      {selected.status === "published" ? "Posted" : "Scheduled"}: {formatDate(contentDate(selected))}{selected.scheduled_time ? ` at ${formatTime(selected.scheduled_time)}` : ""}
                     </p>
                   )}
                 </div>

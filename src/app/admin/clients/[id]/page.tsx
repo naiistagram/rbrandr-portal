@@ -99,6 +99,8 @@ export default function ClientDetailPage() {
   // Admin content detail modal
   const [adminSelected, setAdminSelected] = useState<ContentItem | null>(null);
   const [adminMediaIndex, setAdminMediaIndex] = useState(0);
+  const [adminEditTitle, setAdminEditTitle] = useState("");
+  const [adminEditType, setAdminEditType] = useState<ContentItem["content_type"]>("post");
   const [adminEditDesc, setAdminEditDesc] = useState("");
   const [adminEditFileUrls, setAdminEditFileUrls] = useState<string[]>([]);
   const [adminEditPlatforms, setAdminEditPlatforms] = useState<string[]>([]);
@@ -107,6 +109,7 @@ export default function ClientDetailPage() {
   const adminEditFileRef = useRef<HTMLInputElement>(null);
   // Admin content filters
   const [adminContentStatus, setAdminContentStatus] = useState<"all" | ContentItem["status"]>("all");
+  const [adminContentType, setAdminContentType] = useState<"all" | ContentItem["content_type"]>("all");
   const [adminContentPlatform, setAdminContentPlatform] = useState<string>("all");
   const [adminContentDate, setAdminContentDate] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1034,6 +1037,8 @@ export default function ClientDetailPage() {
   function openAdminDetail(item: ContentItem) {
     setAdminSelected(item);
     setAdminMediaIndex(0);
+    setAdminEditTitle(item.title);
+    setAdminEditType(item.content_type);
     setAdminEditDesc(item.description ?? "");
     setAdminEditFileUrls(item.file_urls ?? []);
     setAdminEditPlatforms(item.platforms);
@@ -1072,6 +1077,8 @@ export default function ClientDetailPage() {
       body: JSON.stringify({
         action: "update_content",
         content_id: adminSelected.id,
+        title: adminEditTitle,
+        content_type: adminEditType,
         description: adminEditDesc || null,
         file_urls: adminEditFileUrls.length > 0 ? adminEditFileUrls : null,
         platforms: adminEditPlatforms,
@@ -1769,6 +1776,7 @@ export default function ClientDetailPage() {
                 { key: "published", label: "Published", color: "data-[active=true]:bg-[var(--accent-subtle)] data-[active=true]:border-[var(--accent)]/40 data-[active=true]:text-[var(--accent)]" },
               ];
               const platforms = PLATFORM_ORDER.filter((p) => content.some((i) => i.platforms.includes(p)));
+              const contentTypes = CONTENT_TYPES.filter((type) => content.some((item) => item.content_type === type));
               const statusCounts = {
                 draft: content.filter((i) => i.status === "draft").length,
                 in_review: content.filter((i) => i.status === "in_review").length,
@@ -1820,6 +1828,26 @@ export default function ClientDetailPage() {
                             onClick={() => setAdminContentPlatform(p)}
                             className={cn("px-3 py-1 rounded-full text-xs font-medium border border-[var(--border)] transition-all cursor-pointer", cfg ? `hover:${cfg.pill} data-[active=true]:${cfg.pill}` : "text-zinc-400")}>
                             {p} <span className="opacity-70">({count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {contentTypes.length > 0 && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      <span className="self-center text-[10px] font-medium uppercase tracking-wider text-[var(--foreground-subtle)]">Type</span>
+                      <button data-active={adminContentType === "all"}
+                        onClick={() => setAdminContentType("all")}
+                        className="px-3 py-1 rounded-full text-xs font-medium border border-[var(--border)] text-[var(--foreground-subtle)] hover:border-zinc-600 transition-all cursor-pointer data-[active=true]:bg-[var(--surface-2)] data-[active=true]:border-zinc-500 data-[active=true]:text-[var(--foreground)]">
+                        All types
+                      </button>
+                      {contentTypes.map((type) => {
+                        const count = content.filter((item) => item.content_type === type).length;
+                        return (
+                          <button key={type} data-active={adminContentType === type}
+                            onClick={() => setAdminContentType(type)}
+                            className="px-3 py-1 rounded-full text-xs font-medium border border-[var(--border)] text-[var(--foreground-subtle)] hover:border-[var(--accent)] transition-all cursor-pointer capitalize data-[active=true]:bg-[var(--accent-subtle)] data-[active=true]:border-[var(--accent)]/40 data-[active=true]:text-[var(--accent)]">
+                            {type} <span className="opacity-70">({count})</span>
                           </button>
                         );
                       })}
@@ -1973,6 +2001,7 @@ export default function ClientDetailPage() {
             {content.length > 0 && (() => {
               const filtered = sortContentByScheduledDate(content.filter((i) =>
                 (adminContentStatus === "all" || i.status === adminContentStatus) &&
+                (adminContentType === "all" || i.content_type === adminContentType) &&
                 (adminContentPlatform === "all" || i.platforms.includes(adminContentPlatform)) &&
                 (!adminContentDate || i.scheduled_date === adminContentDate)
               ));
@@ -2014,10 +2043,17 @@ export default function ClientDetailPage() {
                               >
                                 <div className={cn("relative aspect-[4/3] bg-[var(--surface-2)] flex items-center justify-center overflow-hidden", !thumb && platCfg ? `bg-gradient-to-br ${platCfg.bg}` : "")}>
                                   {thumb && isPdfUrl(thumb) ? (
-                                    <div className="flex flex-col items-center gap-2 text-red-300">
-                                      <FileText className="w-10 h-10" />
-                                      <span className="text-xs font-semibold uppercase tracking-wider">PDF document</span>
-                                    </div>
+                                    <>
+                                      <iframe
+                                        src={`${thumb}#page=1&view=FitH&toolbar=0&navpanes=0`}
+                                        title={`${item.title} first page preview`}
+                                        className="pointer-events-none h-full w-full border-0 bg-white"
+                                      />
+                                      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-6 text-xs font-semibold text-white">
+                                        <FileText className="h-3.5 w-3.5" />
+                                        PDF document
+                                      </div>
+                                    </>
                                   ) : thumb ? (
                                     <img src={thumb} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                                   ) : (
@@ -2142,7 +2178,20 @@ export default function ClientDetailPage() {
                       <span className={cn("text-xs font-semibold", s?.color)}>{s?.label}</span>
                       <span className={cn("text-[10px] font-semibold capitalize px-2 py-0.5 rounded border ml-auto", TYPE_PILL[adminSelected.content_type] ?? TYPE_PILL.other)}>{adminSelected.content_type}</span>
                     </div>
-                    <h4 className="text-base font-bold text-[var(--foreground)] leading-tight">{adminSelected.title}</h4>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-[var(--foreground-muted)] block">Title</label>
+                      <input
+                        value={adminEditTitle}
+                        onChange={(e) => setAdminEditTitle(e.target.value)}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-[var(--foreground-muted)] block">Type</label>
+                      <select value={adminEditType} onChange={(e) => setAdminEditType(e.target.value as ContentItem["content_type"])} className={inputClass}>
+                        {CONTENT_TYPES.map((type) => <option key={type} value={type} className="capitalize">{type}</option>)}
+                      </select>
+                    </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-[var(--foreground-muted)] block">Status</label>
                       <select
@@ -2874,6 +2923,34 @@ export default function ClientDetailPage() {
         {/* ── REPORTS TAB ── */}
         {tab === "Reports" && (
           <div className="space-y-5 max-w-2xl">
+            {project && (() => {
+              const published = content.filter((item) => item.status === "published");
+              const byType = CONTENT_TYPES
+                .map((type) => ({ type, count: published.filter((item) => item.content_type === type).length }))
+                .filter((item) => item.count > 0);
+              return (
+                <div className="bg-[var(--accent-subtle)] border border-[var(--accent)]/20 rounded-xl p-5">
+                  <div className="flex items-start gap-3">
+                    <BarChart3 className="w-5 h-5 text-[var(--accent)] mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-[var(--foreground)]">Content delivery tracker</h4>
+                      <p className="text-xs text-[var(--foreground-muted)] mt-1">
+                        {published.length} published item{published.length === 1 ? "" : "s"} for this project. Use the type filters in Content to review the individual items before preparing a client report.
+                      </p>
+                      {byType.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-3">
+                          {byType.map(({ type, count }) => (
+                            <span key={type} className="px-2.5 py-1 rounded-full text-xs capitalize bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground-muted)]">
+                              {count} {type}{count === 1 ? "" : "s"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             {project && (
               <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4">
                 <h4 className="text-sm font-semibold text-[var(--foreground)]">Upload Report</h4>

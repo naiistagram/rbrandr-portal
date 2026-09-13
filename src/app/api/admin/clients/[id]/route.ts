@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendContentStatusEmail } from "@/lib/email";
 
+const CONTENT_TYPES = ["post", "story", "reel", "ad", "email", "blog", "other"];
+
 async function verifyAdmin() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -51,10 +53,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   if (action === "update_content") {
-    const { content_id, description, file_urls, status, scheduled_date, scheduled_time, platforms, send_email } = body;
+    const { content_id, title, content_type, description, file_urls, status, scheduled_date, scheduled_time, platforms, send_email } = body;
     if (!content_id) return NextResponse.json({ error: "content_id required" }, { status: 400 });
+    if (title !== undefined && (typeof title !== "string" || !title.trim())) {
+      return NextResponse.json({ error: "title must not be empty" }, { status: 400 });
+    }
+    if (content_type !== undefined && !CONTENT_TYPES.includes(content_type)) {
+      return NextResponse.json({ error: "Unsupported content type" }, { status: 400 });
+    }
 
     const updates: Record<string, unknown> = {};
+    if (title !== undefined) updates.title = title.trim();
+    if (content_type !== undefined) updates.content_type = content_type;
     if (description !== undefined) updates.description = description;
     if (file_urls !== undefined) updates.file_urls = file_urls;
     if (status !== undefined) updates.status = status;
