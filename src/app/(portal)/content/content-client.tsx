@@ -119,9 +119,13 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
     return matchSearch && matchStatus && matchPlatform && matchPublishedMonth;
   });
 
-  const publishedMonths = Array.from(new Set(
-    items.filter((item) => item.status === "published").map(contentMonth)
-  )).sort((a, b) => b.localeCompare(a));
+  const publishedMonthCounts = new Map<string, number>();
+  for (const item of items) {
+    if (item.status !== "published") continue;
+    const month = contentMonth(item);
+    publishedMonthCounts.set(month, (publishedMonthCounts.get(month) ?? 0) + 1);
+  }
+  const publishedMonths = Array.from(publishedMonthCounts.keys()).sort((a, b) => b.localeCompare(a));
 
   const counts = {
     all: items.length,
@@ -415,10 +419,12 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
               className="min-w-44 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
             >
               <option value="">All published months</option>
-              {publishedMonths.map((month) => <option key={month} value={month}>{formatMonth(month)}</option>)}
+              {publishedMonths.map((month) => <option key={month} value={month}>{formatMonth(month)} ({publishedMonthCounts.get(month) ?? 0})</option>)}
             </select>
             <span className="text-xs text-[var(--foreground-subtle)]">
-              {publishedMonthFilter ? `Showing ${formatMonth(publishedMonthFilter)}` : "Choose a month to review published content"}
+              {publishedMonthFilter
+                ? `Showing ${formatMonth(publishedMonthFilter)} · ${publishedMonthCounts.get(publishedMonthFilter) ?? 0} post${publishedMonthCounts.get(publishedMonthFilter) === 1 ? "" : "s"}`
+                : `${counts.published} published posts across ${publishedMonths.length} month${publishedMonths.length === 1 ? "" : "s"}`}
             </span>
           </div>
         )}

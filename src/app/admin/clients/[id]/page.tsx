@@ -60,6 +60,17 @@ function isPdfUrl(url: string) {
   return /\.pdf($|[?#])/i.test(url);
 }
 
+function contentMonth(item: ContentItem) {
+  return (item.scheduled_date ?? item.created_at.slice(0, 10)).slice(0, 7);
+}
+
+function formatContentMonth(month: string) {
+  return new Date(`${month}-01T12:00:00`).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function sortContentByScheduledDate(items: ContentItem[]) {
   return [...items].sort((a, b) => {
     const dateOrder = (b.scheduled_date ?? "").localeCompare(a.scheduled_date ?? "");
@@ -111,6 +122,7 @@ export default function ClientDetailPage() {
   const [adminContentStatus, setAdminContentStatus] = useState<"all" | ContentItem["status"]>("all");
   const [adminContentType, setAdminContentType] = useState<"all" | ContentItem["content_type"]>("all");
   const [adminContentPlatform, setAdminContentPlatform] = useState<string>("all");
+  const [adminPublishedMonthFilter, setAdminPublishedMonthFilter] = useState("");
   const [adminContentDate, setAdminContentDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [adminId, setAdminId] = useState("");
@@ -1777,6 +1789,13 @@ export default function ClientDetailPage() {
               ];
               const platforms = PLATFORM_ORDER.filter((p) => content.some((i) => i.platforms.includes(p)));
               const contentTypes = CONTENT_TYPES.filter((type) => content.some((item) => item.content_type === type));
+              const publishedMonthCounts = new Map<string, number>();
+              for (const item of content) {
+                if (item.status !== "published") continue;
+                const month = contentMonth(item);
+                publishedMonthCounts.set(month, (publishedMonthCounts.get(month) ?? 0) + 1);
+              }
+              const publishedMonths = Array.from(publishedMonthCounts.keys()).sort((a, b) => b.localeCompare(a));
               const statusCounts = {
                 draft: content.filter((i) => i.status === "draft").length,
                 in_review: content.filter((i) => i.status === "in_review").length,
@@ -1791,7 +1810,11 @@ export default function ClientDetailPage() {
                     {(["draft", "in_review", "approved", "rejected", "published"] as const).map((s) => {
                       const cfg = STATUS_CONFIG[s];
                       return (
-                        <button key={s} onClick={() => setAdminContentStatus(adminContentStatus === s ? "all" : s)}
+                        <button key={s} onClick={() => {
+                          const nextStatus = adminContentStatus === s ? "all" : s;
+                          setAdminContentStatus(nextStatus);
+                          if (nextStatus !== "published") setAdminPublishedMonthFilter("");
+                        }}
                           className={cn("p-2.5 rounded-lg border text-left transition-all cursor-pointer", adminContentStatus === s ? "bg-[var(--surface-2)] border-zinc-600" : "bg-[var(--surface)] border-[var(--border)] hover:border-zinc-600")}>
                           <p className="text-base font-bold text-[var(--foreground)]">{statusCounts[s]}</p>
                           <p className={cn("text-[10px] font-medium mt-0.5", cfg?.color ?? "text-zinc-400")}>{cfg?.label ?? s}</p>
@@ -1805,13 +1828,35 @@ export default function ClientDetailPage() {
                       const count = key === "all" ? content.length : statusCounts[key as keyof typeof statusCounts];
                       return (
                         <button key={key} data-active={adminContentStatus === key}
-                          onClick={() => setAdminContentStatus(key)}
+                          onClick={() => {
+                            setAdminContentStatus(key);
+                            if (key !== "published") setAdminPublishedMonthFilter("");
+                          }}
                           className={cn("px-3 py-1 rounded-full text-xs font-medium border border-[var(--border)] text-[var(--foreground-subtle)] hover:border-zinc-600 transition-all cursor-pointer", color)}>
                           {label} {count > 0 && <span className="opacity-70">({count})</span>}
                         </button>
                       );
                     })}
                   </div>
+                  {adminContentStatus === "published" && publishedMonths.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+                      <label htmlFor="admin-published-month" className="text-xs font-medium text-[var(--foreground-muted)]">Posted in</label>
+                      <select
+                        id="admin-published-month"
+                        value={adminPublishedMonthFilter}
+                        onChange={(e) => setAdminPublishedMonthFilter(e.target.value)}
+                        className="min-w-48 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-xs text-[var(--foreground)] outline-none focus:border-[var(--accent)]"
+                      >
+                        <option value="">All published months ({statusCounts.published})</option>
+                        {publishedMonths.map((month) => <option key={month} value={month}>{formatContentMonth(month)} ({publishedMonthCounts.get(month) ?? 0})</option>)}
+                      </select>
+                      {adminPublishedMonthFilter && (
+                        <span className="text-xs text-[var(--foreground-subtle)]">
+                          {publishedMonthCounts.get(adminPublishedMonthFilter) ?? 0} post{publishedMonthCounts.get(adminPublishedMonthFilter) === 1 ? "" : "s"} in {formatContentMonth(adminPublishedMonthFilter)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {/* Platform pills */}
                   {platforms.length > 0 && (
                     <div className="flex gap-1.5 flex-wrap">
@@ -2003,6 +2048,7 @@ export default function ClientDetailPage() {
                 (adminContentStatus === "all" || i.status === adminContentStatus) &&
                 (adminContentType === "all" || i.content_type === adminContentType) &&
                 (adminContentPlatform === "all" || i.platforms.includes(adminContentPlatform)) &&
+                (adminContentStatus !== "published" || !adminPublishedMonthFilter || contentMonth(i) === adminPublishedMonthFilter) &&
                 (!adminContentDate || i.scheduled_date === adminContentDate)
               ));
               const grouped: Record<string, ContentItem[]> = {};
