@@ -82,9 +82,8 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
 
   const statuses: FilterStatus[] = ["all", "draft", "in_review", "approved", "rejected", "published"];
 
-  // Keep the client-facing content view current when an admin adds, edits or
-  // publishes an item. A polling fallback keeps this working if Realtime is
-  // temporarily unavailable.
+  // Realtime is enabled for content_items. Avoiding periodic full-list fetches
+  // prevents media previews from needlessly re-rendering while being reviewed.
   useEffect(() => {
     if (!projectId || preview) return;
     const applyChange = (event: string, next: ContentItem | null, oldId?: string) => {
@@ -101,13 +100,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
         applyChange(payload.eventType, (payload.new as ContentItem) ?? null, (payload.old as { id?: string }).id);
       })
       .subscribe();
-    const refresh = window.setInterval(async () => {
-      const response = await fetch("/api/content");
-      if (!response.ok) return;
-      const json = await response.json();
-      setItems(json.content ?? []);
-    }, 15000);
-    return () => { window.clearInterval(refresh); supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(channel); };
   }, [projectId, preview, supabase]);
 
   const filtered = items.filter((item) => {

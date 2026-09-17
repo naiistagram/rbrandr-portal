@@ -44,19 +44,16 @@ export default function DocumentsPage() {
     setUploadError("");
     setUploading(true);
     for (const file of acceptedFiles) {
-      const path = `documents/${projectId}/${Date.now()}-${file.name}`;
-      const { error } = await supabase.storage.from("documents").upload(path, file);
-      if (error) continue;
-      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
-      const { data } = await supabase.from("documents").insert({
-        project_id: projectId,
-        uploaded_by: userId,
-        title: file.name,
-        file_url: urlData.publicUrl,
-        file_type: file.type,
-        file_size: file.size,
-      }).select().single();
-      if (data) setDocs((prev) => [data, ...prev]);
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("projectId", projectId);
+      const response = await fetch("/api/documents", { method: "POST", body: formData });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setUploadError(payload.error ?? `Could not upload ${file.name}.`);
+        continue;
+      }
+      if (payload.document) setDocs((prev) => [payload.document, ...prev]);
     }
     setUploading(false);
   }, [projectId, userId, supabase]);

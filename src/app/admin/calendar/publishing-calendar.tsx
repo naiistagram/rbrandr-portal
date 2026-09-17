@@ -44,13 +44,22 @@ function calendarDate(date: string) {
 
 export function AdminPublishingCalendar({ initialContent, connections, loadError }: { initialContent: CalendarContent[]; connections: Connection[]; loadError: string | null }) {
   const [month, setMonth] = useState(new Date());
+  const [content, setContent] = useState(initialContent);
   const [selected, setSelected] = useState<CalendarContent | null>(null);
   const [clientFilter, setClientFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | CalendarContent["status"]>("all");
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | "unscheduled" | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
-  const clients = useMemo(() => Array.from(new Set(initialContent.map(clientName))).sort(), [initialContent]);
+  const clients = useMemo(() => Array.from(new Set(content.map(clientName))).sort(), [content]);
   const visibleContent = useMemo(
-    () => initialContent.filter((item) => clientFilter === "all" || clientName(item) === clientFilter),
-    [initialContent, clientFilter],
+    () => content.filter((item) =>
+      (clientFilter === "all" || clientName(item) === clientFilter) &&
+      (statusFilter === "all" || item.status === statusFilter)
+    ),
+    [content, clientFilter, statusFilter],
   );
   const connectionMap = useMemo(() => {
     const map = new Map<string, Connection[]>();
@@ -64,6 +73,7 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
   });
   const scheduledToPublish = visibleContent.filter((item) => item.publish_at && item.status === "approved").length;
   const readyToSchedule = visibleContent.filter((item) => item.status === "approved" && !item.publish_at).length;
+  const unscheduledContent = visibleContent.filter((item) => !item.scheduled_date);
 
   function itemsOn(day: Date) {
     const target = format(day, "yyyy-MM-dd");
@@ -74,13 +84,68 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
     return connectionMap.get(item.project_id) ?? [];
   }
 
+  async function moveContent(itemId: string, scheduledDate: string | null) {
+    const item = content.find((entry) => entry.id === itemId);
+    if (!item || item.scheduled_date === scheduledDate) return;
+
+    setMovingId(itemId);
+    setMoveError(null);
+    setContent((current) => current.map((entry) => entry.id === itemId
+      ? { ...entry, scheduled_date: scheduledDate, publish_at: null, publish_error: null }
+      : entry
+    ));
+    setSelected((current) => current?.id === itemId
+      ? { ...current, scheduled_date: scheduledDate, publish_at: null, publish_error: null }
+      : current
+    );
+
+    try {
+      const response = await fetch("/api/admin/content-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, scheduledDate }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error ?? "Could not move this content item.");
+      }
+    } catch (error) {
+      setContent((current) => current.map((entry) => entry.id === itemId ? item : entry));
+      setSelected((current) => current?.id === itemId ? item : current);
+      setMoveError(error instanceof Error ? error.message : "Could not move this content item.");
+    } finally {
+      setMovingId(null);
+      setDraggedId(null);
+      setDropTarget(null);
+    }
+  }
+
+  function beginDrag(event: React.DragEvent<HTMLButtonElement>, itemId: string) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", itemId);
+    setDraggedId(itemId);
+    setMoveError(null);
+  }
+
+  function allowDrop(event: React.DragEvent, target: string | "unscheduled") {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropTarget(target);
+  }
+
+  function dropContent(event: React.DragEvent, scheduledDate: string | null) {
+    event.preventDefault();
+    const itemId = event.dataTransfer.getData("text/plain") || draggedId;
+    if (itemId) void moveContent(itemId, scheduledDate);
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-[var(--border)] px-6 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-lg font-bold text-[var(--foreground)]">Publishing Calendar</h1>
-            <p className="text-sm text-[var(--foreground-muted)]">Plan content by date and see the channels each client has connected.</p>
+            <p className="text-sm text-[var(--foreground-muted)]">Drag content between days to reschedule it. Detailed editing and uploads stay in each client&apos;s content area.</p>
           </div>
           <Link href="/admin/clients" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90">
             Manage client content <ExternalLink className="h-3.5 w-3.5" />
@@ -90,6 +155,7 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
 
       <main className="flex-1 p-4 sm:p-6 space-y-5 animate-fade-in">
         {loadError && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">Calendar data could not fully load: {loadError}</p>}
+        {moveError && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{moveError}</p>}
 
         <section className="grid gap-3 sm:grid-cols-3">
           <Summary icon={CalendarDays} label="Planned content" value={visibleContent.length} />
@@ -112,6 +178,13 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
                 {clients.map((client) => <option key={client} value={client}>{client}</option>)}
               </select>
             </label>
+            <label className="flex items-center gap-2 text-xs text-[var(--foreground-muted)]">
+              Status
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} className="rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1.5 text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)]">
+                <option value="all">All statuses</option>
+                {Object.entries(STATUS_CONFIG).map(([status, config]) => <option key={status} value={status}>{config.label}</option>)}
+              </select>
+            </label>
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-2 border-b border-[var(--border)] bg-[var(--surface-2)] px-4 py-2.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--foreground-subtle)]">Client key</span>
@@ -124,19 +197,46 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
           <div className="grid grid-cols-7">
             {days.map((day) => {
               const dayItems = itemsOn(day);
-              return <div key={day.toISOString()} className={cn("min-h-30 border-b border-r border-[var(--border)] p-1.5 sm:min-h-36 sm:p-2", !isSameMonth(day, month) && "bg-[var(--surface-2)]/50")}>
+              const date = format(day, "yyyy-MM-dd");
+              return <div
+                key={day.toISOString()}
+                onDragOver={(event) => allowDrop(event, date)}
+                onDragLeave={() => setDropTarget((current) => current === date ? null : current)}
+                onDrop={(event) => dropContent(event, date)}
+                className={cn(
+                  "min-h-30 border-b border-r border-[var(--border)] p-1.5 transition-colors sm:min-h-36 sm:p-2",
+                  !isSameMonth(day, month) && "bg-[var(--surface-2)]/50",
+                  dropTarget === date && "bg-[var(--accent-subtle)] ring-1 ring-inset ring-[var(--accent)]"
+                )}
+              >
                 <p className={cn("mb-1 text-xs font-medium", isSameMonth(day, month) ? "text-[var(--foreground-muted)]" : "text-[var(--foreground-subtle)]")}>{format(day, "d")}</p>
                 <div className="space-y-1">
-                  {dayItems.slice(0, 3).map((item) => <button key={item.id} onClick={() => setSelected(item)} style={{ borderLeftColor: clientColour(clientName(item)) }} className={cn("block w-full border border-l-[3px] rounded-md px-1.5 py-1 text-left transition-colors hover:brightness-125", STATUS_CONFIG[item.status].bg, "border-white/5")}>
-                    <p className="truncate text-[9px] font-medium text-[var(--foreground-muted)]">{clientName(item)}</p>
-                    <p className="truncate text-[10px] font-semibold text-[var(--foreground)]">{item.title}</p>
-                    <div className="mt-1 flex items-center gap-1">{item.platforms.filter((platform) => PUBLISHABLE_PLATFORMS.has(platform)).slice(0, 3).map((platform) => <span title={platform} key={platform} className={cn("h-1.5 w-1.5 rounded-full", PLATFORM_CONFIG[platform]?.dot ?? "bg-zinc-400")} />)}</div>
-                  </button>)}
+                  {dayItems.slice(0, 3).map((item) => <PlannerCard key={item.id} item={item} disabled={movingId === item.id} onClick={() => setSelected(item)} onDragStart={(event) => beginDrag(event, item.id)} onDragEnd={() => { setDraggedId(null); setDropTarget(null); }} />)}
                   {dayItems.length > 3 && <button onClick={() => setSelected(dayItems[3])} className="w-full text-left text-[10px] font-medium text-[var(--accent)]">+{dayItems.length - 3} more</button>}
                 </div>
               </div>;
             })}
           </div>
+        </section>
+
+        <section
+          onDragOver={(event) => allowDrop(event, "unscheduled")}
+          onDragLeave={() => setDropTarget((current) => current === "unscheduled" ? null : current)}
+          onDrop={(event) => dropContent(event, null)}
+          className={cn("rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-4 transition-colors", dropTarget === "unscheduled" && "border-[var(--accent)] bg-[var(--accent-subtle)]")}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[var(--foreground)]">Unscheduled content</h2>
+              <p className="mt-1 text-xs text-[var(--foreground-muted)]">Drag a card here to take it off the calendar, or drag one onto a day to plan it.</p>
+            </div>
+            <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs font-medium text-[var(--foreground-muted)]">{unscheduledContent.length}</span>
+          </div>
+          {unscheduledContent.length > 0 ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              {unscheduledContent.map((item) => <PlannerCard key={item.id} item={item} disabled={movingId === item.id} onClick={() => setSelected(item)} onDragStart={(event) => beginDrag(event, item.id)} onDragEnd={() => { setDraggedId(null); setDropTarget(null); }} />)}
+            </div>
+          ) : <p className="mt-3 text-xs text-[var(--foreground-subtle)]">Everything matching the current filters is on the calendar.</p>}
         </section>
 
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
@@ -148,6 +248,32 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
       {selected && <DetailPanel item={selected} channels={channelsFor(selected)} onClose={() => setSelected(null)} />}
     </div>
   );
+}
+
+function PlannerCard({ item, disabled, onClick, onDragStart, onDragEnd }: {
+  item: CalendarContent;
+  disabled: boolean;
+  onClick: () => void;
+  onDragStart: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDragEnd: () => void;
+}) {
+  return <button
+    draggable={!disabled}
+    disabled={disabled}
+    onClick={onClick}
+    onDragStart={onDragStart}
+    onDragEnd={onDragEnd}
+    style={{ borderLeftColor: clientColour(clientName(item)) }}
+    className={cn("block w-full cursor-grab rounded-md border border-l-[3px] px-1.5 py-1 text-left transition-all hover:brightness-125 active:cursor-grabbing disabled:cursor-wait disabled:opacity-60", STATUS_CONFIG[item.status].bg, "border-white/5")}
+    aria-label={`Move ${item.title}`}
+  >
+    <p className="truncate text-[9px] font-medium text-[var(--foreground-muted)]">{clientName(item)}</p>
+    <p className="truncate text-[10px] font-semibold text-[var(--foreground)]">{item.title}</p>
+    <div className="mt-1 flex items-center gap-1">
+      <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_CONFIG[item.status].dot)} title={STATUS_CONFIG[item.status].label} />
+      {item.platforms.filter((platform) => PUBLISHABLE_PLATFORMS.has(platform)).slice(0, 3).map((platform) => <span title={platform} key={platform} className={cn("h-1.5 w-1.5 rounded-full", PLATFORM_CONFIG[platform]?.dot ?? "bg-zinc-400")} />)}
+    </div>
+  </button>;
 }
 
 function Summary({ icon: Icon, label, value, color = "text-[var(--accent)]" }: { icon: typeof CalendarDays; label: string; value: number; color?: string }) {

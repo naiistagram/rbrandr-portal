@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { signStorageUrl } from "@/lib/storage-url";
 
 export async function GET() {
   const supabase = await createClient();
@@ -26,5 +27,9 @@ export async function GET() {
     .in("project_id", projectIds)
     .order("created_at", { ascending: false });
 
-  return NextResponse.json({ reports: reports ?? [] });
+  const signedReports = await Promise.all((reports ?? []).map(async (report) => ({
+    ...report,
+    file_url: await signStorageUrl(admin, "reports", report.file_url),
+  })));
+  return NextResponse.json({ reports: signedReports });
 }

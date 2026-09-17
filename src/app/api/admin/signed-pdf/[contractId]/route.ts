@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { storedObjectPath } from "@/lib/storage-url";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ contractId: string }> }) {
@@ -24,9 +25,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ con
   if (!contract.signature_data) return NextResponse.json({ error: "No signature" }, { status: 400 });
   if (!contract.file_url) return NextResponse.json({ error: "No PDF" }, { status: 400 });
 
-  const pdfRes = await fetch(contract.file_url);
-  if (!pdfRes.ok) return NextResponse.json({ error: "Could not fetch PDF" }, { status: 502 });
-  const pdfBytes = await pdfRes.arrayBuffer();
+  const path = storedObjectPath(contract.file_url, "contracts");
+  if (!path) return NextResponse.json({ error: "Could not locate the contract file." }, { status: 500 });
+  const { data: sourceFile, error: downloadError } = await admin.storage.from("contracts").download(path);
+  if (downloadError || !sourceFile) return NextResponse.json({ error: "Could not fetch PDF" }, { status: 502 });
+  const pdfBytes = await sourceFile.arrayBuffer();
 
   const pdfDoc = await PDFDocument.load(pdfBytes);
   const pages = pdfDoc.getPages();

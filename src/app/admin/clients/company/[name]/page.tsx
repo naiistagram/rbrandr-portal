@@ -8,6 +8,7 @@ import {
   Ticket as TicketIcon, MessageSquare, ScrollText, ExternalLink, Film, Camera,
 } from "lucide-react";
 import { cn, formatDate, getInitials, STATUS_CONFIG } from "@/lib/utils";
+import { signStorageUrl } from "@/lib/storage-url";
 import CompanyUploadForms from "./CompanyUploadForms";
 
 export const dynamic = "force-dynamic";
@@ -128,10 +129,10 @@ export default async function CompanyPage({
   // All data aggregated across all projects
   const [
     { data: content },
-    { data: contracts },
-    { data: reports },
+    { data: rawContracts },
+    { data: rawReports },
     { data: assets },
-    { data: documents },
+    { data: rawDocuments },
     { data: milestones },
     { data: forms },
     { data: tickets },
@@ -166,15 +167,21 @@ export default async function CompanyPage({
       : Promise.resolve({ data: [] }),
   ]);
 
+  const [contracts, reports, documents] = await Promise.all([
+    Promise.all((rawContracts ?? []).map(async (contract) => ({ ...contract, file_url: await signStorageUrl(admin, "contracts", contract.file_url) }))),
+    Promise.all((rawReports ?? []).map(async (report) => ({ ...report, file_url: await signStorageUrl(admin, "reports", report.file_url) }))),
+    Promise.all((rawDocuments ?? []).map(async (document) => ({ ...document, file_url: await signStorageUrl(admin, "documents", document.file_url) }))),
+  ]);
+
   const tabCounts: Record<Tab, number> = {
     "Overview": clients.length,
     "Content": (content ?? []).length,
     "Assets": (assets ?? []).length,
-    "Documents": (documents ?? []).length,
+    "Documents": documents.length,
     "Timeline": (milestones ?? []).length,
     "Forms": (forms ?? []).length,
-    "Contracts & T&Cs": (contracts ?? []).length,
-    "Reports": (reports ?? []).length,
+    "Contracts & T&Cs": contracts.length,
+    "Reports": reports.length,
     "Tickets": (tickets ?? []).length,
     "Feedback": (feedback ?? []).length,
   };
@@ -518,8 +525,8 @@ export default async function CompanyPage({
             {primaryClient && primaryProject && (
               <CompanyUploadForms clientId={primaryClient.id} projectId={primaryProject.id} tab={tab} />
             )}
-            {(documents ?? []).length === 0 ? <EmptyState label="No documents yet." /> : (
-              (documents ?? []).map((doc) => {
+            {documents.length === 0 ? <EmptyState label="No documents yet." /> : (
+              documents.map((doc) => {
                 const d = doc as { id: string; title: string; description?: string | null; file_url: string; created_at: string; project_id: string };
                 const proj = projectMap[d.project_id];
                 const owner = proj ? clientMap[proj.client_id] : null;
@@ -614,8 +621,8 @@ export default async function CompanyPage({
             {primaryClient && primaryProject && (
               <CompanyUploadForms clientId={primaryClient.id} projectId={primaryProject.id} tab={tab} />
             )}
-            {(contracts ?? []).length === 0 ? <EmptyState label="No contracts yet." /> : (
-              (contracts ?? []).map((contract) => {
+            {contracts.length === 0 ? <EmptyState label="No contracts yet." /> : (
+              contracts.map((contract) => {
                 const c = contract as { id: string; title: string; status: string; type?: string; file_url: string; created_at: string; project_id: string };
                 const proj = projectMap[c.project_id];
                 const owner = proj ? clientMap[proj.client_id] : null;
@@ -652,8 +659,8 @@ export default async function CompanyPage({
             {primaryClient && primaryProject && (
               <CompanyUploadForms clientId={primaryClient.id} projectId={primaryProject.id} tab={tab} />
             )}
-            {(reports ?? []).length === 0 ? <EmptyState label="No reports yet." /> : (
-              (reports ?? []).map((report) => {
+            {reports.length === 0 ? <EmptyState label="No reports yet." /> : (
+              reports.map((report) => {
                 const r = report as { id: string; title: string; period?: string | null; file_url: string; created_at: string; project_id: string };
                 const proj = projectMap[r.project_id];
                 const owner = proj ? clientMap[proj.client_id] : null;

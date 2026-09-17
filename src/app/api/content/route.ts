@@ -109,14 +109,23 @@ export async function PATCH(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const { id, status, feedback } = body;
+  const { id, status, feedback, annotationUrl } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  if (status !== undefined && status !== "approved" && status !== "rejected") {
+    return NextResponse.json({ error: "Clients can only approve or reject content." }, { status: 400 });
+  }
+  if (feedback !== undefined && (typeof feedback !== "string" || feedback.length > 5000)) {
+    return NextResponse.json({ error: "Feedback must be 5,000 characters or fewer." }, { status: 400 });
+  }
+  if (annotationUrl !== undefined && typeof annotationUrl !== "string") {
+    return NextResponse.json({ error: "Invalid annotation." }, { status: 400 });
+  }
 
   const admin = createAdminClient();
 
   const { data: item } = await admin
     .from("content_items")
-    .select("id, project_id")
+    .select("id, project_id, file_urls")
     .eq("id", id)
     .single();
 
@@ -132,6 +141,11 @@ export async function PATCH(request: NextRequest) {
   const updates: Record<string, unknown> = {};
   if (status !== undefined) updates.status = status;
   if (feedback !== undefined) updates.feedback = feedback;
+  if (annotationUrl !== undefined) {
+    const expectedPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/assets/${item.project_id}/annotation-${id}-`;
+    if (!annotationUrl.startsWith(expectedPrefix)) return NextResponse.json({ error: "Invalid annotation location." }, { status: 400 });
+    updates.file_urls = [...(item.file_urls ?? []), annotationUrl];
+  }
 
   const { data, error } = await admin
     .from("content_items")

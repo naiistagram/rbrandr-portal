@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendContentStatusEmail } from "@/lib/email";
+import { signStorageUrl } from "@/lib/storage-url";
 
 const CONTENT_TYPES = ["post", "story", "reel", "carousel", "ad", "email", "blog", "other"];
 
@@ -210,15 +211,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     admin.from("feedback").select("*, profiles(full_name, email)").eq("submitted_by", clientId).order("created_at", { ascending: false }),
   ]);
 
+  const [signedContracts, signedReports, signedDocuments] = await Promise.all([
+    Promise.all((contracts ?? []).map(async (contract) => ({ ...contract, file_url: await signStorageUrl(admin, "contracts", contract.file_url) }))),
+    Promise.all((reports ?? []).map(async (report) => ({ ...report, file_url: await signStorageUrl(admin, "reports", report.file_url) }))),
+    Promise.all((documents ?? []).map(async (document) => ({ ...document, file_url: await signStorageUrl(admin, "documents", document.file_url) }))),
+  ]);
+
   return NextResponse.json({
     client,
     projects: allProjects,
     project,
     content: content ?? [],
-    contracts: contracts ?? [],
-    reports: reports ?? [],
+    contracts: signedContracts,
+    reports: signedReports,
     assets: assets ?? [],
-    documents: documents ?? [],
+    documents: signedDocuments,
     milestones: milestones ?? [],
     forms: forms ?? [],
     tickets: tickets ?? [],

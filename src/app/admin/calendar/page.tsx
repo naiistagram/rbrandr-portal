@@ -27,7 +27,6 @@ export default async function AdminCalendarPage() {
     admin
       .from("content_items")
       .select("id, project_id, title, content_type, description, file_urls, platforms, status, scheduled_date, scheduled_time, publish_at, publish_error, projects(client_id, name, profiles(full_name, company_name))")
-      .not("scheduled_date", "is", null)
       .order("scheduled_date", { ascending: true }),
     admin.from("social_connections").select("project_id, platform, account_name").order("platform"),
   ]);

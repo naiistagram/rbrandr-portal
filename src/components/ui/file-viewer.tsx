@@ -25,6 +25,7 @@ export function FileViewer({
   files,
   initialIndex = 0,
   contentId,
+  projectId,
   onClose,
   onAnnotationSaved,
   readOnly = false,
@@ -32,6 +33,7 @@ export function FileViewer({
   files: string[];
   initialIndex?: number;
   contentId: string;
+  projectId: string;
   onClose: () => void;
   onAnnotationSaved?: (newUrls: string[]) => void;
   readOnly?: boolean;
@@ -53,25 +55,6 @@ export function FileViewer({
   const currentFile = files[index] ?? "";
   const fileIsPDF = isPDF(currentFile);
   const fileIsAnnotation = isAnnotationFile(currentFile);
-
-  // Size canvas to container whenever annotating or index changes
-  useEffect(() => {
-    if (!annotating) return;
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
-
-    const size = () => {
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-      redraw();
-    };
-    size();
-    const ro = new ResizeObserver(size);
-    ro.observe(container);
-    return () => ro.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [annotating, index]);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -105,6 +88,24 @@ export function FileViewer({
     annotations.forEach(drawOne);
     if (currentAnn) drawOne(currentAnn);
   }, [annotations, currentAnn]);
+
+  // Size canvas to container whenever annotating or index changes.
+  useEffect(() => {
+    if (!annotating) return;
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    const size = () => {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      redraw();
+    };
+    size();
+    const ro = new ResizeObserver(size);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [annotating, index, redraw]);
 
   useEffect(() => { redraw(); }, [redraw]);
 
@@ -242,22 +243,21 @@ export function FileViewer({
     const blob = await new Promise<Blob | null>((res) => sourceCanvas.toBlob(res, "image/png"));
     if (!blob) { setSaving(false); return; }
 
-    const path = `annotation-${contentId}-${Date.now()}.png`;
+    const path = `${projectId}/annotation-${contentId}-${Date.now()}.png`;
     const { error } = await supabase.storage.from("assets").upload(path, blob, { contentType: "image/png" });
     if (error) { setSaving(false); return; }
 
     const { data: { publicUrl } } = supabase.storage.from("assets").getPublicUrl(path);
 
-    const { data: item } = await supabase
-      .from("content_items")
-      .select("file_urls")
-      .eq("id", contentId)
-      .single();
+    const response = await fetch("/api/content", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: contentId, annotationUrl: publicUrl }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.content?.file_urls) { setSaving(false); return; }
 
-    const newUrls = [...(item?.file_urls ?? []), publicUrl];
-    await supabase.from("content_items").update({ file_urls: newUrls }).eq("id", contentId);
-
-    onAnnotationSaved?.(newUrls);
+    onAnnotationSaved?.(payload.content.file_urls);
     setAnnotations([]);
     setAnnotating(false);
     setSaving(false);

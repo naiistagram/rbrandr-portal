@@ -160,12 +160,7 @@ export default function CalendarPage() {
         applyChange(payload.eventType, (payload.new as ContentItem) ?? null, (payload.old as { id?: string }).id);
       })
       .subscribe();
-    const refresh = window.setInterval(() => {
-      fetch("/api/content").then((response) => response.ok ? response.json() : null).then((json) => {
-        if (json?.content) setItems(json.content);
-      });
-    }, 15000);
-    return () => { window.clearInterval(refresh); supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(channel); };
   // The client is deliberately stable for this page's lifetime.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
@@ -925,11 +920,12 @@ export default function CalendarPage() {
       {renderFullContentModal()}
 
       {/* File Viewer */}
-      {viewerFiles.length > 0 && viewerItemId && (
+      {viewerFiles.length > 0 && viewerItemId && projectId && (
         <FileViewer
           files={viewerFiles}
           initialIndex={viewerIndex}
           contentId={viewerItemId}
+          projectId={projectId}
           onClose={() => { setViewerFiles([]); setViewerItemId(null); }}
           onAnnotationSaved={handleAnnotationSaved}
         />
