@@ -1939,6 +1939,14 @@ export default function ClientDetailPage() {
                     <label className={labelClass}>Title *</label>
                     <input type="text" required value={contentForm.title} onChange={(e) => setContentForm((f) => ({ ...f, title: e.target.value }))} placeholder="Content title" className={inputClass} />
                   </div>
+                  <div className="rounded-xl border border-[var(--accent)]/60 bg-[var(--accent-subtle)] p-4 space-y-2 shadow-[0_0_0_1px_var(--accent-subtle)]">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-[var(--accent)]" />
+                      <label className="text-xs font-semibold text-[var(--foreground)]">Client review note <span className="font-normal text-[var(--foreground-muted)]">(optional)</span></label>
+                    </div>
+                    <p className="text-xs text-[var(--foreground-muted)]">Add a clear question for the client, such as “Can you confirm the image and caption are correct?” It is highlighted beside this item while it is In Review.</p>
+                    <textarea rows={3} maxLength={5000} value={contentForm.review_note} onChange={(e) => setContentForm((f) => ({ ...f, review_note: e.target.value }))} placeholder="What do you need the client to check?" className={`${inputClass} resize-y`} />
+                  </div>
                   <div>
                     <label className={labelClass}>Type</label>
                     <select value={contentForm.content_type} onChange={(e) => setContentForm((f) => ({ ...f, content_type: e.target.value as ContentItem["content_type"] }))} className={inputClass}>
@@ -2005,14 +2013,6 @@ export default function ClientDetailPage() {
                   <div>
                     <label className={labelClass}>Caption / Description</label>
                     <textarea rows={8} value={contentForm.description} onChange={(e) => setContentForm((f) => ({ ...f, description: e.target.value }))} placeholder="Write the full caption, hashtags, or notes..." className={`${inputClass} min-h-48 resize-y leading-relaxed`} />
-                  </div>
-                  <div className="rounded-xl border border-[var(--accent)]/35 bg-[var(--accent-subtle)]/40 p-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4 text-[var(--accent)]" />
-                      <label className="text-xs font-semibold text-[var(--foreground)]">Note for client review</label>
-                    </div>
-                    <p className="text-xs text-[var(--foreground-muted)]">Use this for a clear question, such as “Can you confirm the image and caption are correct?” It will be highlighted beside this item when the client reviews it.</p>
-                    <textarea rows={3} maxLength={5000} value={contentForm.review_note} onChange={(e) => setContentForm((f) => ({ ...f, review_note: e.target.value }))} placeholder="What do you need the client to check?" className={`${inputClass} resize-y`} />
                   </div>
                   <div>
                     <label className={labelClass}>Attachments (PDF, images, videos)</label>
@@ -2361,7 +2361,17 @@ export default function ClientDetailPage() {
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-[var(--foreground-muted)] block">Caption / Notes</label>
+                      <div className="rounded-xl border border-[var(--accent)]/60 bg-[var(--accent-subtle)] p-3 space-y-2 shadow-[0_0_0_1px_var(--accent-subtle)]">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+                          <label className="text-xs font-semibold text-[var(--foreground)]">Client review note <span className="font-normal text-[var(--foreground-muted)]">(optional)</span></label>
+                        </div>
+                        <p className="text-[10px] text-[var(--foreground-muted)]">Give the client a clear question to answer while this content is In Review.</p>
+                        <textarea rows={3} maxLength={5000} value={adminReviewNote} onChange={(e) => setAdminReviewNote(e.target.value)} placeholder="What do you need the client to check?" className={`${inputClass} resize-y`} />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-[var(--foreground-muted)] block">Caption / Description</label>
                       <textarea
                         rows={4}
                         value={adminEditDesc}
@@ -2369,14 +2379,6 @@ export default function ClientDetailPage() {
                         placeholder="Add a caption or notes for the client…"
                         className={`${inputClass} resize-none`}
                       />
-                    </div>
-                    <div className="rounded-xl border border-[var(--accent)]/35 bg-[var(--accent-subtle)]/40 p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
-                        <label className="text-xs font-semibold text-[var(--foreground)]">Note for client review</label>
-                      </div>
-                      <textarea rows={3} maxLength={5000} value={adminReviewNote} onChange={(e) => setAdminReviewNote(e.target.value)} placeholder="What do you need the client to check?" className={`${inputClass} resize-y`} />
-                      <p className="text-[10px] text-[var(--foreground-subtle)]">This is highlighted to the client while the item is In Review.</p>
                     </div>
 
                     {/* File upload */}
