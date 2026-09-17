@@ -18,6 +18,9 @@
 4. Copy ALL the contents and paste into the SQL editor
 5. Click **Run** (or press Cmd+Enter)
 
+Then run `supabase-notes-migration.sql` in a new SQL query. It creates the
+shared-notes tables and their access rules.
+
 ---
 
 ## Step 3: Get Your API Keys

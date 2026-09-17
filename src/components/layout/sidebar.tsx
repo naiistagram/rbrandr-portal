@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Ticket,
   MessageSquare,
+  StickyNote,
   Milestone,
   BookOpen,
   Menu,
@@ -38,6 +39,7 @@ const SOCIAL_MEDIA_NAV = [
   { label: "Contracts & T&Cs", href: "/contracts", icon: ScrollText },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Tickets", href: "/tickets", icon: Ticket },
+  { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Feedback", href: "/feedback", icon: MessageSquare },
 ];
 
@@ -47,6 +49,7 @@ const BRAND_NAV = [
   { label: "Timeline", href: "/timeline", icon: Milestone },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Tickets", href: "/tickets", icon: Ticket },
+  { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Documents", href: "/documents", icon: BookOpen },
   { label: "Contracts & T&Cs", href: "/contracts", icon: ScrollText },
   { label: "Forms", href: "/forms", icon: FileText },
@@ -60,6 +63,7 @@ const WEBSITE_NAV = [
   { label: "Documents", href: "/documents", icon: BookOpen },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Tickets", href: "/tickets", icon: Ticket },
+  { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Contracts & T&Cs", href: "/contracts", icon: ScrollText },
   { label: "Forms", href: "/forms", icon: FileText },
   { label: "Feedback", href: "/feedback", icon: MessageSquare },
@@ -76,6 +80,7 @@ const BOTH_NAV = [
   { label: "Contracts & T&Cs", href: "/contracts", icon: ScrollText },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Tickets", href: "/tickets", icon: Ticket },
+  { label: "Notes", href: "/notes", icon: StickyNote },
   { label: "Feedback", href: "/feedback", icon: MessageSquare },
 ];
 

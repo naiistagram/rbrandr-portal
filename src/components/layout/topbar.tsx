@@ -29,6 +29,17 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
   const effectiveAvatarUrl = portalUser?.avatarUrl ?? avatarUrl;
   const effectiveFullName = portalUser?.fullName ?? fullName;
 
+  async function fetchNotifications() {
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (data) setNotifications(data);
+  }
+
   useEffect(() => {
     if (!portalUser && !avatarProp && !nameProp && userId) {
       supabase.from("profiles").select("avatar_url, full_name").eq("id", userId).single().then(({ data }) => {
@@ -39,7 +50,7 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
   }, [userId, portalUser, avatarProp, nameProp]);
 
   useEffect(() => {
-    fetchNotifications();
+    void Promise.resolve().then(fetchNotifications);
 
     const channel = supabase
       .channel("notifications")
@@ -62,17 +73,6 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
-
-  async function fetchNotifications() {
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (data) setNotifications(data);
-  }
 
   async function markAllRead() {
     await supabase
@@ -133,14 +133,8 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
                     No notifications yet
                   </div>
                 ) : (
-                  notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className={cn(
-                        "px-4 py-3 border-b border-[var(--border-subtle)] last:border-0 transition-colors",
-                        !n.read && "bg-[var(--accent-subtle)]/40"
-                      )}
-                    >
+                  notifications.map((n) => {
+                    const content = (
                       <div className="flex items-start gap-2">
                         {!n.read && (
                           <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mt-1.5 flex-shrink-0" />
@@ -153,8 +147,16 @@ export function Topbar({ title, subtitle, userId, avatarUrl: avatarProp, fullNam
                           </p>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                    const className = cn(
+                      "px-4 py-3 border-b border-[var(--border-subtle)] last:border-0 transition-colors",
+                      n.link && "block hover:bg-[var(--surface-2)]",
+                      !n.read && "bg-[var(--accent-subtle)]/40"
+                    );
+                    return n.link ? (
+                      <Link key={n.id} href={n.link} onClick={() => setOpen(false)} className={className}>{content}</Link>
+                    ) : <div key={n.id} className={className}>{content}</div>;
+                  })
                 )}
               </div>
             </div>

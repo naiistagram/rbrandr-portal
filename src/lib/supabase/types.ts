@@ -168,3 +168,21 @@ export interface Feedback {
   admin_reply: string | null;
   created_at: string;
 }
+
+export interface PortalNoteComment {
+  id: string;
+  note_id: string;
+  author_id: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface PortalNote {
+  id: string;
+  project_id: string;
+  author_id: string | null;
+  body: string;
+  status: "open" | "resolved";
+  created_at: string;
+  updated_at: string;
+}
