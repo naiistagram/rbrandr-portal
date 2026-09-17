@@ -64,6 +64,7 @@ export interface ContentItem {
   publish_error?: string | null;
   file_urls: string[] | null;
   feedback: string | null;
+  review_note: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -167,22 +168,4 @@ export interface Feedback {
   category: "general" | "service" | "platform" | "other";
   admin_reply: string | null;
   created_at: string;
-}
-
-export interface PortalNoteComment {
-  id: string;
-  note_id: string;
-  author_id: string | null;
-  body: string;
-  created_at: string;
-}
-
-export interface PortalNote {
-  id: string;
-  project_id: string;
-  author_id: string | null;
-  body: string;
-  status: "open" | "resolved";
-  created_at: string;
-  updated_at: string;
 }

@@ -24,8 +24,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { action } = body;
 
   if (action === "add_content") {
-    const { project_id, title, content_type, platforms, description, scheduled_date, scheduled_time, status, file_urls, created_by, send_email } = body;
+    const { project_id, title, content_type, platforms, description, review_note, scheduled_date, scheduled_time, status, file_urls, created_by, send_email } = body;
     if (!project_id || !title) return NextResponse.json({ error: "project_id and title required" }, { status: 400 });
+    if (review_note !== undefined && (typeof review_note !== "string" || review_note.trim().length > 5000)) {
+      return NextResponse.json({ error: "Review note must be 5,000 characters or fewer" }, { status: 400 });
+    }
 
     const { data, error } = await auth.admin.from("content_items").insert({
       project_id,
@@ -33,6 +36,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       content_type: content_type ?? "post",
       platforms: Array.isArray(platforms) ? platforms : [],
       description: description ?? null,
+      review_note: review_note?.trim() || null,
       scheduled_date: scheduled_date ?? null,
       scheduled_time: scheduled_time ?? null,
       status: status ?? "draft",
@@ -46,14 +50,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // as "in_review" — without this, only the separate quick-status dropdown
     // on an existing item triggered the "ready for review" email.
     if (send_email !== false && (data.status === "in_review" || data.status === "approved" || data.status === "published")) {
-      await sendContentStatusEmail(data.project_id, data.title, data.status);
+      await sendContentStatusEmail(data.project_id, data.title, data.status, data.review_note);
     }
 
     return NextResponse.json({ content: data });
   }
 
   if (action === "update_content") {
-    const { content_id, title, content_type, description, file_urls, status, scheduled_date, scheduled_time, platforms, send_email } = body;
+    const { content_id, title, content_type, description, review_note, file_urls, status, scheduled_date, scheduled_time, platforms, send_email } = body;
     if (!content_id) return NextResponse.json({ error: "content_id required" }, { status: 400 });
     if (title !== undefined && (typeof title !== "string" || !title.trim())) {
       return NextResponse.json({ error: "title must not be empty" }, { status: 400 });
@@ -61,11 +65,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (content_type !== undefined && !CONTENT_TYPES.includes(content_type)) {
       return NextResponse.json({ error: "Unsupported content type" }, { status: 400 });
     }
+    if (review_note !== undefined && (typeof review_note !== "string" || review_note.trim().length > 5000)) {
+      return NextResponse.json({ error: "Review note must be 5,000 characters or fewer" }, { status: 400 });
+    }
 
     const updates: Record<string, unknown> = {};
     if (title !== undefined) updates.title = title.trim();
     if (content_type !== undefined) updates.content_type = content_type;
     if (description !== undefined) updates.description = description;
+    if (review_note !== undefined) updates.review_note = review_note.trim() || null;
     if (file_urls !== undefined) updates.file_urls = file_urls;
     if (status !== undefined) updates.status = status;
     if (scheduled_date !== undefined) updates.scheduled_date = scheduled_date;
@@ -81,8 +89,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (error) return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
 
-    if (send_email !== false && (status === "in_review" || status === "approved" || status === "published")) {
-      await sendContentStatusEmail(data.project_id, data.title, status);
+    const shouldNotifyReview = data.status === "in_review" && review_note !== undefined;
+    if (send_email !== false && (status === "in_review" || status === "approved" || status === "published" || shouldNotifyReview)) {
+      await sendContentStatusEmail(data.project_id, data.title, (status === "approved" || status === "published") ? status : "in_review", data.review_note);
     }
 
     return NextResponse.json({ content: data });

@@ -118,7 +118,8 @@ const CONTENT_STATUS_LABELS: Record<string, string> = {
 export async function sendContentStatusEmail(
   projectId: string,
   itemTitle: string,
-  status: "in_review" | "approved" | "published"
+  status: "in_review" | "approved" | "published",
+  reviewNote?: string | null,
 ): Promise<void> {
   const memberEmails = await getProjectMemberEmails(projectId);
   if (memberEmails.length === 0) return;
@@ -131,7 +132,7 @@ export async function sendContentStatusEmail(
       subject: `Content ready for your review — ${itemTitle}`,
       html: buildEmailHtml({
         title: "Content is ready for your review",
-        body: `Your account manager has submitted <strong style="color:#fafafa;">"${itemTitle}"</strong> for your review. Please take a look and let us know your thoughts.`,
+        body: `Your account manager has submitted <strong style="color:#fafafa;">"${itemTitle}"</strong> for your review.${reviewNote ? ` They left a note for you: <strong style="color:#fafafa;">"${reviewNote}"</strong>` : ""} Please take a look and let us know your thoughts.`,
         ctaText: "Review content",
         ctaUrl: `${appUrl}/calendar`,
       }),

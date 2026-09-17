@@ -113,6 +113,7 @@ export default function ClientDetailPage() {
   const [adminEditTitle, setAdminEditTitle] = useState("");
   const [adminEditType, setAdminEditType] = useState<ContentItem["content_type"]>("post");
   const [adminEditDesc, setAdminEditDesc] = useState("");
+  const [adminReviewNote, setAdminReviewNote] = useState("");
   const [adminEditFileUrls, setAdminEditFileUrls] = useState<string[]>([]);
   const [adminEditPlatforms, setAdminEditPlatforms] = useState<string[]>([]);
   const [uploadingEditFile, setUploadingEditFile] = useState(false);
@@ -177,7 +178,7 @@ export default function ClientDetailPage() {
   const [showContentForm, setShowContentForm] = useState(false);
   const [contentForm, setContentForm] = useState({
     title: "", content_type: "post" as ContentItem["content_type"], platforms: [] as string[],
-    description: "", scheduled_date: "", scheduled_time: "", status: "draft" as ContentItem["status"], send_email: true,
+    description: "", review_note: "", scheduled_date: "", scheduled_time: "", status: "draft" as ContentItem["status"], send_email: true,
   });
   const [addingContent, setAddingContent] = useState(false);
   const contentFileRef = useRef<HTMLInputElement>(null);
@@ -610,6 +611,7 @@ export default function ClientDetailPage() {
         content_type: contentForm.content_type,
         platforms: contentForm.platforms,
         description: contentForm.description || null,
+        review_note: contentForm.review_note,
         scheduled_date: contentForm.scheduled_date || null,
         scheduled_time: contentForm.scheduled_time || null,
         status: contentForm.status,
@@ -623,7 +625,7 @@ export default function ClientDetailPage() {
     if (!res.ok) { alert(`Failed to add content: ${json.error}`); setAddingContent(false); return; }
     if (json.content) setContent((prev) => sortContentByScheduledDate([...prev, json.content]));
     setShowContentForm(false);
-    setContentForm({ title: "", content_type: "post", platforms: [], description: "", scheduled_date: "", scheduled_time: "", status: "draft", send_email: true });
+    setContentForm({ title: "", content_type: "post", platforms: [], description: "", review_note: "", scheduled_date: "", scheduled_time: "", status: "draft", send_email: true });
     setContentFileUrls([]);
     setAddingContent(false);
   }
@@ -1052,6 +1054,7 @@ export default function ClientDetailPage() {
     setAdminEditTitle(item.title);
     setAdminEditType(item.content_type);
     setAdminEditDesc(item.description ?? "");
+    setAdminReviewNote(item.review_note ?? "");
     setAdminEditFileUrls(item.file_urls ?? []);
     setAdminEditPlatforms(item.platforms);
     setSendStatusEmail(true);
@@ -1092,6 +1095,7 @@ export default function ClientDetailPage() {
         title: adminEditTitle,
         content_type: adminEditType,
         description: adminEditDesc || null,
+        review_note: adminReviewNote,
         file_urls: adminEditFileUrls.length > 0 ? adminEditFileUrls : null,
         platforms: adminEditPlatforms,
       }),
@@ -2002,6 +2006,14 @@ export default function ClientDetailPage() {
                     <label className={labelClass}>Caption / Description</label>
                     <textarea rows={8} value={contentForm.description} onChange={(e) => setContentForm((f) => ({ ...f, description: e.target.value }))} placeholder="Write the full caption, hashtags, or notes..." className={`${inputClass} min-h-48 resize-y leading-relaxed`} />
                   </div>
+                  <div className="rounded-xl border border-[var(--accent)]/35 bg-[var(--accent-subtle)]/40 p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-[var(--accent)]" />
+                      <label className="text-xs font-semibold text-[var(--foreground)]">Note for client review</label>
+                    </div>
+                    <p className="text-xs text-[var(--foreground-muted)]">Use this for a clear question, such as “Can you confirm the image and caption are correct?” It will be highlighted beside this item when the client reviews it.</p>
+                    <textarea rows={3} maxLength={5000} value={contentForm.review_note} onChange={(e) => setContentForm((f) => ({ ...f, review_note: e.target.value }))} placeholder="What do you need the client to check?" className={`${inputClass} resize-y`} />
+                  </div>
                   <div>
                     <label className={labelClass}>Attachments (PDF, images, videos)</label>
                     <input ref={contentFileRef} type="file" accept=".pdf,image/*,video/*" multiple onChange={handleContentFileUpload} className="hidden" />
@@ -2357,6 +2369,14 @@ export default function ClientDetailPage() {
                         placeholder="Add a caption or notes for the client…"
                         className={`${inputClass} resize-none`}
                       />
+                    </div>
+                    <div className="rounded-xl border border-[var(--accent)]/35 bg-[var(--accent-subtle)]/40 p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <MessageSquare className="w-3.5 h-3.5 text-[var(--accent)]" />
+                        <label className="text-xs font-semibold text-[var(--foreground)]">Note for client review</label>
+                      </div>
+                      <textarea rows={3} maxLength={5000} value={adminReviewNote} onChange={(e) => setAdminReviewNote(e.target.value)} placeholder="What do you need the client to check?" className={`${inputClass} resize-y`} />
+                      <p className="text-[10px] text-[var(--foreground-subtle)]">This is highlighted to the client while the item is In Review.</p>
                     </div>
 
                     {/* File upload */}
