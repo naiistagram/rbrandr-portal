@@ -135,6 +135,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
     rejected: items.filter((i) => i.status === "rejected").length,
     published: items.filter((i) => i.status === "published").length,
   };
+  const hasItemsInReview = counts.in_review > 0;
 
   const platformCounts: Record<string, number> = {};
   for (const p of PLATFORM_ORDER) {
@@ -368,7 +369,7 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
                 }}
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all cursor-pointer flex items-center gap-1.5",
-                  s === "in_review" && "review-status-laser",
+                  s === "in_review" && hasItemsInReview && "review-status-laser",
                   statusFilter === s
                     ? "bg-[var(--accent-subtle)] text-[var(--accent)]"
                     : "bg-[var(--surface)] border border-[var(--border)] text-[var(--foreground-muted)] hover:text-[var(--foreground)]"
@@ -442,7 +443,10 @@ export function ContentClient({ initialItems, initialProjectId, userId, preview 
             return (
               <Card
                 key={s}
-                className={cn("py-3 px-4 cursor-pointer", s === "in_review" && "review-status-laser")}
+                className={cn(
+                  "py-3 px-4 cursor-pointer",
+                  s === "in_review" && hasItemsInReview && "review-status-laser"
+                )}
                 onClick={() => {
                   const nextStatus = statusFilter === s ? "all" : s;
                   setStatusFilter(nextStatus);
