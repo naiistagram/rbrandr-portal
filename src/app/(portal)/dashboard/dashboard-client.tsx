@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL } from "@/lib/content-display";
+import { SocialPerformanceSummary } from "@/components/dashboard/social-performance-summary";
 import type { Project, ContentItem } from "@/lib/supabase/types";
 
 type DashboardProject = Pick<
@@ -158,6 +159,9 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
           {totalActions === 0 && <p className="text-[10px] text-emerald-400 mt-0.5">All caught up!</p>}
         </Card>
       </div>
+
+      {/* ── Live social performance ── */}
+      <SocialPerformanceSummary />
 
       {/* ── Pending contracts banner ── */}
       {pendingContracts.length > 0 && (
