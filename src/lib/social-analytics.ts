@@ -67,7 +67,9 @@ export async function syncMetaConnection(connection: MetaConnection, requestedDa
   const days = Math.min(Math.max(Math.round(requestedDays), 1), MAX_LOOKBACK_DAYS);
   const end = new Date();
   const start = new Date(end);
-  start.setUTCDate(start.getUTCDate() - days);
+  // Meta accepts a maximum 30 × 24 hour window. Starting at midnight exactly
+  // 30 calendar days ago would exceed that once today's partial day is added.
+  start.setUTCDate(start.getUTCDate() - (days - 1));
   start.setUTCHours(0, 0, 0, 0);
   const token = decryptSocialToken(connection.encrypted_access_token);
   const rows: Array<{ project_id: string; social_connection_id: string; provider: "meta"; platform: "Facebook" | "Instagram"; account_id: string; metric: string; metric_date: string; value: number; collected_at: string }> = [];
