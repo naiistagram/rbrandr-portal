@@ -102,8 +102,8 @@ export function PerformanceDashboard() {
     return values;
   }, [visibleMetrics]);
   const preferredMetrics = platform === "Facebook"
-    ? ["impressions", "interactions", "visits", "reactions"]
-    : ["views", "reach", "interactions", "profile_visits", "link_clicks", "impressions", "visits", "reactions"];
+    ? ["views", "reach", "interactions", "follows", "impressions", "visits", "reactions"]
+    : ["views", "reach", "interactions", "engaged_accounts", "profile_visits", "link_clicks", "impressions", "visits", "reactions"];
   const cards = preferredMetrics.filter((metric) => totals.has(metric)).slice(0, 4);
   const chartMetric = cards.find((metric) => ["views", "impressions", "reach"].includes(metric)) ?? cards[0];
   const dailyValues = useMemo(() => {

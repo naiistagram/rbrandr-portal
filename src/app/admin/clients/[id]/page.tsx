@@ -364,11 +364,11 @@ export default function ClientDetailPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: project.id, days: 30 }),
     });
     const data = await res.json().catch(() => ({}));
-    if (res.ok) {
+    if (res.ok && data.status !== "failed") {
       const suffix = data.status === "partial" ? " Some metrics were not available from Meta." : "";
       setAnalyticsSyncMessage(`Updated ${data.metricsWritten ?? 0} daily performance points.${suffix}`);
     } else {
-      setAnalyticsSyncMessage(data.error ?? "Performance sync failed.");
+      setAnalyticsSyncMessage(data.errors?.[0] ?? data.error ?? "Performance sync failed.");
     }
     setSyncingSocialAnalytics(false);
   }
