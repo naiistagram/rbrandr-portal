@@ -4,6 +4,18 @@ import { getVerifiedAdmin } from "@/lib/social-auth";
 
 export const runtime = "nodejs";
 
+async function subscribeMetaPageToPublishWebhooks(pageId: string, accessToken: string) {
+  const response = await fetch(`https://graph.facebook.com/v25.0/${pageId}/subscribed_apps`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ subscribed_fields: "feed", access_token: accessToken }),
+  });
+  const payload = await response.json().catch(() => ({})) as { success?: boolean; error?: { message?: string } };
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.error?.message ?? "Meta could not subscribe this Page to publish notifications.");
+  }
+}
+
 export async function GET(request: NextRequest) {
   const auth = await getVerifiedAdmin();
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -58,6 +70,19 @@ export async function POST(request: NextRequest) {
   const candidates = JSON.parse(decryptSocialToken(candidate.encrypted_payload)) as Candidate[];
   const selected = candidates.filter((item) => accountIds.includes(`${item.platform}:${item.accountId}`));
   if (!selected.length) return NextResponse.json({ error: "Selected accounts are no longer available." }, { status: 400 });
+
+  // Subscribing each selected Page lets the signed Meta webhook mark the
+  // portal item Published at Meta's actual publication time.
+  try {
+    const pages = new Map<string, string>();
+    for (const item of selected) {
+      const pageId = item.metadata.page_id;
+      if (pageId) pages.set(pageId, item.accessToken);
+    }
+    await Promise.all([...pages].map(([pageId, accessToken]) => subscribeMetaPageToPublishWebhooks(pageId, accessToken)));
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to enable Meta publish notifications." }, { status: 502 });
+  }
 
   await auth.admin.from("social_connections").delete().eq("project_id", candidate.project_id).eq("provider", candidate.provider);
   const { error: insertError } = await auth.admin.from("social_connections").insert(selected.map((item) => ({

@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { BarChart3, Download, FileText, Calendar } from "lucide-react";
+import { BarChart3, Download, Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Card } from "@/components/ui/card";
 import { Topbar } from "@/components/layout/topbar";
+import { PerformanceDashboard } from "@/components/reports/performance-dashboard";
 import { formatDate } from "@/lib/utils";
 import type { Report } from "@/lib/supabase/types";
 
@@ -34,6 +34,7 @@ export default function ReportsPage() {
       <Topbar title="Reports" subtitle="Track the work being done on your project" userId={userId} />
 
       <div className="flex-1 p-6 animate-fade-in">
+        <PerformanceDashboard />
         {reports.length === 0 ? (
           <div className="text-center py-20">
             <BarChart3 className="w-10 h-10 text-[var(--foreground-subtle)] mx-auto mb-3" />

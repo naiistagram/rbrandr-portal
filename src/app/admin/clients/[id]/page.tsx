@@ -9,7 +9,7 @@ import {
   Ticket as TicketIcon, CheckCircle2, Circle, Calendar, Trash2,
   AlignLeft, CheckSquare, List,
   Target, Megaphone, Radio, TrendingUp, Users, Trophy, Eye,
-  Film, Camera, ChevronLeft, ChevronRight, Paperclip, Globe, MessageSquare, Star, Building2, Send,
+  Film, Camera, ChevronLeft, ChevronRight, Paperclip, Globe, MessageSquare, Star, Building2, Send, RefreshCw,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import type {
 
 const CONTENT_TYPES = ["post", "story", "reel", "carousel", "ad", "email", "blog", "other"] as const;
 const PLATFORMS = ["Instagram", "Facebook", "TikTok", "LinkedIn", "Twitter/X", "YouTube", "Email", "Blog"];
+const DIRECT_PUBLISH_PLATFORMS = ["Instagram", "Facebook", "LinkedIn"] as const;
 const SERVICE_TYPES = [
   { value: "social_media", label: "Social Media" },
   { value: "brand", label: "Brand" },
@@ -150,9 +151,12 @@ export default function ClientDetailPage() {
   type SocialConnection = { id: string; provider: "meta" | "linkedin"; platform: "Facebook" | "Instagram" | "LinkedIn"; account_id: string; account_name: string; token_expires_at: string | null };
   const [socialConnections, setSocialConnections] = useState<SocialConnection[]>([]);
   const [socialLoading, setSocialLoading] = useState(false);
+  const [syncingSocialAnalytics, setSyncingSocialAnalytics] = useState(false);
+  const [analyticsSyncMessage, setAnalyticsSyncMessage] = useState("");
   const [publishingContent, setPublishingContent] = useState(false);
   const [schedulingContent, setSchedulingContent] = useState(false);
   const [publishMessage, setPublishMessage] = useState("");
+  const [publishResults, setPublishResults] = useState<Array<{ platform: string; ok: boolean; error: string | null }>>([]);
   const [scheduleMessage, setScheduleMessage] = useState("");
   type SocialCandidate = { id: string; platform: "Facebook" | "Instagram"; accountName: string };
   const [socialCandidateId, setSocialCandidateId] = useState<string | null>(null);
@@ -352,19 +356,39 @@ export default function ClientDetailPage() {
     if (res.ok) setSocialConnections((connections) => connections.filter((connection) => connection.id !== connectionId));
   }
 
+  async function syncSocialAnalytics() {
+    if (!project) return;
+    setSyncingSocialAnalytics(true);
+    setAnalyticsSyncMessage("");
+    const res = await fetch("/api/admin/social/analytics/sync", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId: project.id, days: 30 }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      const suffix = data.status === "partial" ? " Some metrics were not available from Meta." : "";
+      setAnalyticsSyncMessage(`Updated ${data.metricsWritten ?? 0} daily performance points.${suffix}`);
+    } else {
+      setAnalyticsSyncMessage(data.error ?? "Performance sync failed.");
+    }
+    setSyncingSocialAnalytics(false);
+  }
+
   async function handlePublishContent() {
     if (!adminSelected) return;
     setPublishingContent(true);
     setPublishMessage("");
+    setPublishResults([]);
     const res = await fetch("/api/social/publish", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contentId: adminSelected.id }),
     });
     const data = await res.json().catch(() => ({}));
-    const successful = Array.isArray(data.results)
-      ? data.results.filter((result: { ok: boolean }) => result.ok).map((result: { platform: string }) => result.platform)
+    const results = Array.isArray(data.results)
+      ? data.results as Array<{ platform: string; ok: boolean; error: string | null }>
       : [];
-    const failed = Array.isArray(data.results)
-      ? data.results.filter((result: { ok: boolean }) => !result.ok).map((result: { platform: string; error: string }) => `${result.platform}: ${result.error}`).join(" ")
+    setPublishResults(results);
+    const successful = results.filter((result) => result.ok).map((result) => result.platform);
+    const failed = results.length
+      ? results.filter((result) => !result.ok).map((result) => `${result.platform}: ${result.error}`).join(" ")
       : data.error;
     if (res.ok && data.published) {
       setContent((items) => items.map((item) => item.id === adminSelected.id ? { ...item, status: "published", publish_at: null, publish_started_at: null, publish_error: null } : item));
@@ -1058,6 +1082,8 @@ export default function ClientDetailPage() {
     setAdminEditFileUrls(item.file_urls ?? []);
     setAdminEditPlatforms(item.platforms);
     setSendStatusEmail(true);
+    setPublishMessage("");
+    setPublishResults([]);
   }
 
   async function handleEditFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1104,7 +1130,8 @@ export default function ClientDetailPage() {
     if (!res.ok) { alert(`Failed to save: ${json.error}`); setSavingEdit(false); return; }
     const updated = json.content as ContentItem;
     setContent((prev) => prev.map((c) => c.id === updated.id ? updated : c));
-    setAdminSelected(null);
+    setAdminSelected(updated);
+    setAdminEditPlatforms(updated.platforms);
     setSavingEdit(false);
   }
 
@@ -1729,6 +1756,9 @@ export default function ClientDetailPage() {
                     <Button size="sm" variant="secondary" onClick={() => connectSocial("meta")} className="gap-1.5">
                       <Globe className="w-3.5 h-3.5" /> Connect Instagram + Facebook
                     </Button>
+                    <Button size="sm" variant="secondary" onClick={syncSocialAnalytics} loading={syncingSocialAnalytics} disabled={!socialConnections.some((connection) => connection.provider === "meta")} className="gap-1.5">
+                      <RefreshCw className="w-3.5 h-3.5" /> Sync performance
+                    </Button>
                     <Button size="sm" variant="secondary" onClick={() => connectSocial("linkedin")} className="gap-1.5">
                       <Building2 className="w-3.5 h-3.5" /> Connect LinkedIn
                     </Button>
@@ -1749,6 +1779,7 @@ export default function ClientDetailPage() {
                 ) : (
                   <p className="text-xs text-amber-300/80 mt-3">No social accounts connected yet.</p>
                 )}
+                {analyticsSyncMessage && <p className={cn("mt-3 text-xs", analyticsSyncMessage.startsWith("Updated") ? "text-emerald-300" : "text-red-300")}>{analyticsSyncMessage}</p>}
               </div>
             )}
 
@@ -2169,6 +2200,10 @@ export default function ClientDetailPage() {
         {adminSelected && (() => {
           const media = adminSelected.file_urls ?? [];
           const s = STATUS_CONFIG[adminSelected.status as keyof typeof STATUS_CONFIG];
+          const channelChoicesChanged = DIRECT_PUBLISH_PLATFORMS.some((platform) =>
+            adminSelected.platforms.includes(platform) !== adminEditPlatforms.includes(platform)
+          );
+          const selectedDirectPlatforms = DIRECT_PUBLISH_PLATFORMS.filter((platform) => adminEditPlatforms.includes(platform));
           return (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAdminSelected(null)}>
               <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row overflow-hidden animate-fade-in" onClick={(e) => e.stopPropagation()}>
@@ -2281,6 +2316,32 @@ export default function ClientDetailPage() {
                     </label>
                     {adminSelected.status === "approved" && (
                       <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 p-3">
+                        <div className="mb-3 rounded-md border border-emerald-300/15 bg-black/10 p-2.5">
+                          <p className="text-xs font-semibold text-emerald-100">Publish to</p>
+                          <p className="mt-0.5 text-[11px] text-emerald-100/70">Tick only the accounts this item should be sent to. Save changes before scheduling or publishing.</p>
+                          <div className="mt-2 space-y-1.5">
+                            {DIRECT_PUBLISH_PLATFORMS.map((platform) => {
+                              const connected = socialConnections.find((connection) => connection.platform === platform);
+                              const checked = adminEditPlatforms.includes(platform);
+                              return (
+                                <label key={platform} className="flex cursor-pointer items-center justify-between gap-3 rounded border border-white/10 bg-black/10 px-2.5 py-2 text-xs">
+                                  <span className="flex items-center gap-2 text-[var(--foreground)]">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => setAdminEditPlatforms((platforms) => checked ? platforms.filter((item) => item !== platform) : [...platforms, platform])}
+                                      className="accent-emerald-400"
+                                    />
+                                    {platform}
+                                  </span>
+                                  <span className={cn("text-[10px]", connected ? "text-emerald-200" : "text-amber-200")}>{connected ? `Connected · ${connected.account_name}` : "Not connected"}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {channelChoicesChanged && <p className="mt-2 text-[11px] text-amber-200">Save channel choices to enable publishing.</p>}
+                          {selectedDirectPlatforms.length === 0 && <p className="mt-2 text-[11px] text-amber-200">Select at least one direct-publishing channel.</p>}
+                        </div>
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-xs font-semibold text-emerald-200">{adminSelected.publish_at ? "Scheduled to publish" : "Ready to publish"}</p>
@@ -2291,16 +2352,26 @@ export default function ClientDetailPage() {
                             </p>
                           </div>
                           <div className="flex flex-wrap justify-end gap-2">
-                            <Button size="sm" variant="secondary" onClick={handleScheduleContent} loading={schedulingContent} disabled={socialConnections.length === 0 || !adminSelected.scheduled_date || !adminSelected.scheduled_time} className="gap-1.5">
+                            <Button size="sm" variant="secondary" onClick={handleScheduleContent} loading={schedulingContent} disabled={socialConnections.length === 0 || channelChoicesChanged || selectedDirectPlatforms.length === 0 || !adminSelected.scheduled_date || !adminSelected.scheduled_time} className="gap-1.5">
                               <Clock className="w-3.5 h-3.5" /> {adminSelected.publish_at ? "Update schedule" : "Schedule publish"}
                             </Button>
-                            <Button size="sm" onClick={handlePublishContent} loading={publishingContent} disabled={socialConnections.length === 0} className="gap-1.5 bg-emerald-500 hover:bg-emerald-600">
+                            <Button size="sm" onClick={handlePublishContent} loading={publishingContent} disabled={socialConnections.length === 0 || channelChoicesChanged || selectedDirectPlatforms.length === 0} className="gap-1.5 bg-emerald-500 hover:bg-emerald-600">
                               <Send className="w-3.5 h-3.5" /> Publish now
                             </Button>
                           </div>
                         </div>
                         {socialConnections.length === 0 && <p className="text-[11px] text-amber-200 mt-2">Connect a social account above before publishing.</p>}
                         {publishMessage && <p className={cn("text-[11px] mt-2", publishMessage.startsWith("Posted successfully") ? "text-emerald-200" : "text-red-300")}>{publishMessage}</p>}
+                        {publishResults.length > 0 && (
+                          <div className="mt-2 space-y-1 rounded-md border border-white/10 bg-black/10 p-2 text-[11px]" aria-live="polite">
+                            <p className="font-semibold text-emerald-100">Latest publishing result</p>
+                            {publishResults.map((result) => (
+                              <p key={result.platform} className={result.ok ? "text-emerald-200" : "text-red-300"}>
+                                {result.ok ? "✓" : "×"} {result.platform}{result.ok ? " published" : ` failed${result.error ? ` — ${result.error}` : ""}`}
+                              </p>
+                            ))}
+                          </div>
+                        )}
                         {scheduleMessage && <p className={cn("text-[11px] mt-2", scheduleMessage.startsWith("Queued") ? "text-emerald-200" : "text-red-300")}>{scheduleMessage}</p>}
                         {adminSelected.publish_error && <p className="text-[11px] text-red-300 mt-2">Last publishing attempt: {adminSelected.publish_error}</p>}
                       </div>

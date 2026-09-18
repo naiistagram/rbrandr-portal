@@ -29,6 +29,13 @@ export type NativeScheduleResult = {
   message?: string;
 };
 
+type FacebookScheduleState = "none" | "pending" | "published";
+
+type InstagramContainerStatus = "ERROR" | "EXPIRED" | "FINISHED" | "IN_PROGRESS" | "PUBLISHED";
+
+const INSTAGRAM_CONTAINER_TIMEOUT_MS = 45_000;
+const INSTAGRAM_CONTAINER_POLL_INTERVAL_MS = 3_000;
+
 function firstMedia(urls: string[] | null) {
   return urls?.find((url) => /\.(jpe?g|png|webp|gif|mp4|mov|webm)(\?|$)/i.test(url)) ?? null;
 }
@@ -40,9 +47,38 @@ function mediaType(url: string | null) {
 async function graphRequest(path: string, token: string, fields: Record<string, string>) {
   const body = new URLSearchParams({ ...fields, access_token: token });
   const response = await fetch(`https://graph.facebook.com/v25.0/${path}`, { method: "POST", body });
-  const payload = await response.json().catch(() => ({})) as { id?: string; error?: { message?: string } };
+  const payload = await response.json().catch(() => ({})) as { id?: string; post_id?: string; error?: { message?: string } };
   if (!response.ok) throw new Error(payload.error?.message ?? "Meta rejected this post.");
   return payload;
+}
+
+async function graphGet(path: string, token: string, fields: Record<string, string>) {
+  const query = new URLSearchParams({ ...fields, access_token: token });
+  const response = await fetch(`https://graph.facebook.com/v25.0/${path}?${query}`, { cache: "no-store" });
+  const payload = await response.json().catch(() => ({})) as { status_code?: InstagramContainerStatus; status?: string; error?: { message?: string } };
+  if (!response.ok) throw new Error(payload.error?.message ?? "Meta could not check the Instagram media status.");
+  return payload;
+}
+
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForInstagramContainer(containerId: string, token: string) {
+  const deadline = Date.now() + INSTAGRAM_CONTAINER_TIMEOUT_MS;
+  let lastStatus: InstagramContainerStatus | undefined;
+
+  while (Date.now() < deadline) {
+    const container = await graphGet(containerId, token, { fields: "status_code,status" });
+    lastStatus = container.status_code;
+    if (lastStatus === "FINISHED") return;
+    if (lastStatus === "ERROR") throw new Error(container.status || "Instagram could not prepare this media for publishing.");
+    if (lastStatus === "EXPIRED") throw new Error("Instagram's media container expired before it could be published.");
+    if (lastStatus === "PUBLISHED") throw new Error("Instagram reported this media container as already published.");
+    await wait(Math.min(INSTAGRAM_CONTAINER_POLL_INTERVAL_MS, Math.max(0, deadline - Date.now())));
+  }
+
+  throw new Error(`Instagram is still preparing the media${lastStatus ? ` (${lastStatus.toLowerCase()})` : ""}. Please try again in a moment.`);
 }
 
 async function graphDelete(path: string, token: string) {
@@ -97,13 +133,14 @@ export async function scheduleFacebookInMeta(
       : { message: caption, published: "false", scheduled_publish_time: String(Math.floor(publishAt.getTime() / 1000)) };
     const path = attachment ? `${connection.account_id}/photos` : `${connection.account_id}/feed`;
     const outcome = await graphRequest(path, decryptSocialToken(connection.encrypted_access_token), fields);
-    if (!outcome.id) throw new Error("Meta did not return a scheduled-post ID.");
+    const externalPostId = outcome.post_id ?? outcome.id;
+    if (!externalPostId) throw new Error("Meta did not return a scheduled-post ID.");
     const { error: attemptError } = await admin.from("social_publish_attempts").insert({
       content_item_id: content.id,
       social_connection_id: connection.id,
       platform: "Facebook",
       status: "pending",
-      external_post_id: outcome.id,
+      external_post_id: externalPostId,
       external_post_url: null,
       error_message: null,
       created_by: createdBy,
@@ -140,24 +177,87 @@ export async function cancelPendingFacebookSchedules(admin: SupabaseClient, cont
   }
 }
 
-export async function hasPendingFacebookSchedule(admin: SupabaseClient, contentId: string) {
+export async function getFacebookScheduleState(admin: SupabaseClient, contentId: string): Promise<FacebookScheduleState> {
   const { data, error } = await admin.from("social_publish_attempts")
-    .select("id")
+    .select("status")
     .eq("content_item_id", contentId)
     .eq("platform", "Facebook")
-    .eq("status", "pending")
-    .limit(1);
+    .in("status", ["pending", "published"])
+    .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return Boolean(data?.length);
+  if (data?.some((attempt) => attempt.status === "pending")) return "pending";
+  return data?.some((attempt) => attempt.status === "published") ? "published" : "none";
 }
 
-export async function markPendingFacebookSchedulePublished(admin: SupabaseClient, contentId: string) {
-  const { error } = await admin.from("social_publish_attempts")
-    .update({ status: "published", error_message: null })
-    .eq("content_item_id", contentId)
+/**
+ * Records the exact publication event sent by Meta. This must only be called
+ * from a signature-verified Meta webhook; a scheduled time is not proof that
+ * Meta actually published the Page post.
+ */
+export async function confirmFacebookSchedulePublished(admin: SupabaseClient, externalPostId: string) {
+  const { data: attempts, error: lookupError } = await admin.from("social_publish_attempts")
+    .select("id, content_item_id, external_post_id, status")
     .eq("platform", "Facebook")
-    .eq("status", "pending");
+    .in("status", ["pending", "published"]);
+  if (lookupError) throw new Error(lookupError.message);
+  // Page photo webhooks identify the feed post as `PAGE_ID_PHOTO_ID`, while
+  // Meta's create-photo response can contain only `PHOTO_ID`.
+  const matchingAttempts = (attempts ?? []).filter((attempt) => {
+    const scheduledId = attempt.external_post_id;
+    return scheduledId && (scheduledId === externalPostId || externalPostId.endsWith(`_${scheduledId}`));
+  });
+  if (!matchingAttempts.length) return [];
+
+  const pendingAttemptIds = matchingAttempts
+    .filter((attempt) => attempt.status === "pending")
+    .map((attempt) => attempt.id);
+  if (pendingAttemptIds.length) {
+    const { error } = await admin.from("social_publish_attempts")
+      .update({ status: "published", error_message: null })
+      .in("id", pendingAttemptIds);
+    if (error) throw new Error(error.message);
+  }
+  return [...new Set(matchingAttempts.map((attempt) => attempt.content_item_id))];
+}
+
+/**
+ * A Facebook-only item can become Published directly from the Meta webhook.
+ * Multi-network items wait until the timed queue has successfully published
+ * every other selected network as well.
+ */
+export async function finalizeMetaFacebookPublication(admin: SupabaseClient, contentId: string) {
+  const { data: content, error: contentError } = await admin.from("content_items")
+    .select("id, platforms, status, publish_started_at, publish_error")
+    .eq("id", contentId)
+    .maybeSingle();
+  if (contentError) throw new Error(contentError.message);
+  if (!content || content.status !== "approved" || content.publish_error) return false;
+
+  const directPlatforms = (content.platforms as string[])
+    .filter((platform) => ["Instagram", "LinkedIn"].includes(platform));
+
+  if (directPlatforms.length) {
+    // A webhook can arrive before Vercel's timed queue starts. In that case it
+    // confirms Facebook only; the queue will publish the remaining platforms.
+    if (!content.publish_started_at) return false;
+    const { data: directAttempts, error: attemptsError } = await admin.from("social_publish_attempts")
+      .select("platform")
+      .eq("content_item_id", contentId)
+      .eq("status", "published")
+      .gte("created_at", content.publish_started_at);
+    if (attemptsError) throw new Error(attemptsError.message);
+    const completedPlatforms = new Set((directAttempts ?? []).map((attempt) => attempt.platform));
+    if (!directPlatforms.every((platform) => completedPlatforms.has(platform))) return false;
+  }
+
+  const { error } = await admin.from("content_items").update({
+    status: "published",
+    publish_at: null,
+    publish_started_at: null,
+    publish_error: null,
+  }).eq("id", contentId).eq("status", "approved");
   if (error) throw new Error(error.message);
+  return true;
 }
 
 async function publishInstagram(connection: Connection, caption: string, mediaUrl: string | null) {
@@ -168,6 +268,10 @@ async function publishInstagram(connection: Connection, caption: string, mediaUr
     : { image_url: mediaUrl, caption };
   const container = await graphRequest(`${connection.account_id}/media`, token, fields);
   if (!container.id) throw new Error("Instagram did not create a media container.");
+  // Meta processes the container asynchronously. Publishing it before it is
+  // FINISHED intermittently produces "Media ID is not available", even for
+  // valid images that have published successfully before.
+  await waitForInstagramContainer(container.id, token);
   return graphRequest(`${connection.account_id}/media_publish`, token, { creation_id: container.id });
 }
 
@@ -199,6 +303,7 @@ export async function publishContent(
   content: PublishableContent,
   createdBy: string | null,
   alreadyScheduledPlatforms: string[] = [],
+  awaitingPlatformConfirmation: string[] = [],
 ) {
   const selectedSupportedPlatforms = content.platforms.filter((platform) => ["Facebook", "Instagram", "LinkedIn"].includes(platform));
   if (!selectedSupportedPlatforms.length) throw new Error("Select Instagram, Facebook, or LinkedIn before publishing.");
@@ -244,14 +349,19 @@ export async function publishContent(
   const missing = supportedPlatforms.filter((platform) => !connections.some((connection) => connection.platform === platform));
   for (const platform of missing) results.push({ platform, accountId: null, ok: false, error: "No connected account for this platform." });
 
-  const published = results.length > 0 && results.every((result) => result.ok);
-  const publishError = published ? null : results.filter((result) => !result.ok).map((result) => `${result.platform}: ${result.error}`).join(" ");
-  await admin.from("content_items").update({
+  const allDirectPublishingSucceeded = results.length > 0 && results.every((result) => result.ok);
+  const published = allDirectPublishingSucceeded && awaitingPlatformConfirmation.length === 0;
+  const publishError = allDirectPublishingSucceeded ? null : results.filter((result) => !result.ok).map((result) => `${result.platform}: ${result.error}`).join(" ");
+  const update: Record<string, string | null> = {
     status: published ? "published" : "approved",
     publish_at: null,
-    publish_started_at: null,
     publish_error: publishError,
-  }).eq("id", content.id);
+  };
+  // Preserve the queue claim while a Meta-scheduled Facebook post awaits its
+  // signed webhook. Clearing it would make it impossible to safely coordinate
+  // a multi-platform item if Meta's notification arrives first.
+  if (!awaitingPlatformConfirmation.length) update.publish_started_at = null;
+  await admin.from("content_items").update(update).eq("id", content.id);
 
-  return { results, published };
+  return { results, published, awaitingPlatformConfirmation: awaitingPlatformConfirmation.length > 0 };
 }

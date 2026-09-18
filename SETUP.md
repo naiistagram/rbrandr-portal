@@ -96,6 +96,27 @@ Then open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## Step 9: Confirm scheduled Facebook posts from Meta
+
+The portal now changes a Facebook-only scheduled item to **Published** when
+Meta sends its actual publication event (rather than when the planned time is
+reached). In your Meta app dashboard:
+
+1. Add `META_WEBHOOK_VERIFY_TOKEN` to Vercel (use a long random value).
+2. Go to **Webhooks** → **Page**, and set the callback URL to
+   `https://your-portal-domain/api/social/webhooks/meta` with that same verify
+   token.
+3. Subscribe the app to the Page `feed` field, then reconnect each Facebook
+   Page in the portal. Reconnecting grants `pages_manage_metadata` and
+   subscribes the selected Page to the portal's webhook.
+
+Meta signs every event with the app secret; the portal rejects unsigned or
+invalid events. For a post that also targets Instagram or LinkedIn, the portal
+waits until those scheduled queue attempts succeed too before showing
+**Published**.
+
+---
+
 ## How to Add Content to the Calendar
 
 In Supabase → **Table Editor** → `content_items`, insert a row:
