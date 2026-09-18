@@ -113,20 +113,18 @@ function shortPostMessage(message: string | undefined) {
 
 async function fetchContentInsights(postId: string, token: string, metrics: string[]) {
   const values = new Map<string, number>();
-  for (const metric of metrics) {
-    try {
-      const query = new URLSearchParams({ metric, access_token: token });
-      const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${postId}/insights?${query}`, { cache: "no-store" });
-      const payload = await response.json().catch(() => ({})) as GraphResponse;
-      if (!response.ok) continue;
-      for (const insight of payload.data ?? []) {
-        const value = numericValue(insight.values?.[0]?.value ?? insight.total_value?.value);
-        if (value !== null && insight.name) values.set(insight.name, value);
-      }
-    } catch {
-      // Insight availability varies by Page and post type. The caller retains
-      // the post using engagement fields returned by the Page posts endpoint.
+  try {
+    const query = new URLSearchParams({ metric: metrics.join(","), access_token: token });
+    const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${postId}/insights?${query}`, { cache: "no-store" });
+    const payload = await response.json().catch(() => ({})) as GraphResponse;
+    if (!response.ok) return values;
+    for (const insight of payload.data ?? []) {
+      const value = numericValue(insight.values?.[0]?.value ?? insight.total_value?.value);
+      if (value !== null && insight.name) values.set(insight.name, value);
     }
+  } catch {
+    // Insight availability varies by Page and post type. The caller retains
+    // the post using engagement fields returned by the Page posts endpoint.
   }
   return values;
 }
