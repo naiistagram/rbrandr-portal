@@ -29,6 +29,28 @@ type InstagramMedia = {
   comments_count?: number;
 };
 
+type FacebookPost = {
+  id: string;
+  message?: string;
+  created_time?: string;
+  permalink_url?: string;
+  full_picture?: string;
+  shares?: { count?: number };
+  reactions?: { summary?: { total_count?: number } };
+  comments?: { summary?: { total_count?: number } };
+  attachments?: { data?: Array<{
+    media_type?: string;
+    media?: { image?: { src?: string }; source?: string };
+    subattachments?: { data?: unknown[] };
+  }> };
+};
+
+type ContentMetricRow = {
+  project_id: string; social_connection_id: string; provider: "meta"; platform: "Facebook" | "Instagram"; account_id: string;
+  external_post_id: string; content_type: string; title: string; permalink: string | null; thumbnail_url: string | null;
+  published_at: string; views: number; reach: number; interactions: number; collected_at: string;
+};
+
 type MetricRequest = {
   sourceMetric: string;
   metric: string;
@@ -77,6 +99,38 @@ function shortCaption(caption: string | undefined) {
   return firstLine.length > 84 ? `${firstLine.slice(0, 81)}…` : firstLine;
 }
 
+function facebookContentType(post: FacebookPost) {
+  const attachment = post.attachments?.data?.[0];
+  if (attachment?.subattachments?.data && attachment.subattachments.data.length > 1) return "carousel";
+  if (attachment?.media_type?.includes("video")) return "reel";
+  return "post";
+}
+
+function shortPostMessage(message: string | undefined) {
+  const firstLine = message?.split("\n").find(Boolean)?.trim() ?? "Facebook post";
+  return firstLine.length > 84 ? `${firstLine.slice(0, 81)}…` : firstLine;
+}
+
+async function fetchContentInsights(postId: string, token: string, metrics: string[]) {
+  const values = new Map<string, number>();
+  for (const metric of metrics) {
+    try {
+      const query = new URLSearchParams({ metric, access_token: token });
+      const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${postId}/insights?${query}`, { cache: "no-store" });
+      const payload = await response.json().catch(() => ({})) as GraphResponse;
+      if (!response.ok) continue;
+      for (const insight of payload.data ?? []) {
+        const value = numericValue(insight.values?.[0]?.value ?? insight.total_value?.value);
+        if (value !== null && insight.name) values.set(insight.name, value);
+      }
+    } catch {
+      // Insight availability varies by Page and post type. The caller retains
+      // the post using engagement fields returned by the Page posts endpoint.
+    }
+  }
+  return values;
+}
+
 async function fetchMetric(accountId: string, token: string, request: MetricRequest, since: number, until: number) {
   const query = new URLSearchParams({ metric: request.sourceMetric, period: "day", since: String(since), until: String(until), access_token: token });
   if (request.metricType) query.set("metric_type", request.metricType);
@@ -96,29 +150,11 @@ async function syncInstagramContent(connection: MetaConnection, token: string, s
   const payload = await response.json().catch(() => ({})) as { data?: InstagramMedia[]; error?: { message?: string } };
   if (!response.ok) throw new Error(`content: ${payload.error?.message ?? "Meta could not retrieve Instagram posts."}`);
 
-  const rows: Array<{
-    project_id: string; social_connection_id: string; provider: "meta"; platform: "Instagram"; account_id: string;
-    external_post_id: string; content_type: string; title: string; permalink: string | null; thumbnail_url: string | null;
-    published_at: string; views: number; reach: number; interactions: number; collected_at: string;
-  }> = [];
+  const rows: ContentMetricRow[] = [];
   for (const media of payload.data ?? []) {
     const publishedAt = media.timestamp ? new Date(media.timestamp) : null;
     if (!publishedAt || Number.isNaN(publishedAt.getTime()) || publishedAt < since) continue;
-    const values = new Map<string, number>();
-    try {
-      const insightQuery = new URLSearchParams({ metric: "views,reach,total_interactions", access_token: token });
-      const insightResponse = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${media.id}/insights?${insightQuery}`, { cache: "no-store" });
-      const insightPayload = await insightResponse.json().catch(() => ({})) as GraphResponse;
-      if (insightResponse.ok) {
-        for (const insight of insightPayload.data ?? []) {
-          const value = numericValue(insight.values?.[0]?.value ?? insight.total_value?.value);
-          if (value !== null && insight.name) values.set(insight.name, value);
-        }
-      }
-    } catch {
-      // The API exposes a different subset for a few media formats. We still
-      // retain the post and use the fields returned by the media endpoint.
-    }
+    const values = await fetchContentInsights(media.id, token, ["views", "reach", "total_interactions"]);
     const interactions = values.get("total_interactions") ?? ((media.like_count ?? 0) + (media.comments_count ?? 0));
     rows.push({
       project_id: connection.project_id,
@@ -141,6 +177,45 @@ async function syncInstagramContent(connection: MetaConnection, token: string, s
   return rows;
 }
 
+async function syncFacebookContent(connection: MetaConnection, token: string, since: Date) {
+  const query = new URLSearchParams({
+    fields: "id,message,created_time,permalink_url,full_picture,shares,reactions.limit(0).summary(true),comments.limit(0).summary(true),attachments{media_type,media,subattachments}",
+    limit: "100",
+    access_token: token,
+  });
+  const response = await fetch(`https://graph.facebook.com/${GRAPH_API_VERSION}/${connection.account_id}/posts?${query}`, { cache: "no-store" });
+  const payload = await response.json().catch(() => ({})) as { data?: FacebookPost[]; error?: { message?: string } };
+  if (!response.ok) throw new Error(`content: ${payload.error?.message ?? "Meta could not retrieve Facebook posts."}`);
+
+  const rows: ContentMetricRow[] = [];
+  for (const post of payload.data ?? []) {
+    const publishedAt = post.created_time ? new Date(post.created_time) : null;
+    if (!publishedAt || Number.isNaN(publishedAt.getTime()) || publishedAt < since) continue;
+    const values = await fetchContentInsights(post.id, token, ["post_impressions", "post_impressions_unique", "post_engaged_users"]);
+    const interactions = values.get("post_engaged_users")
+      ?? (post.reactions?.summary?.total_count ?? 0) + (post.comments?.summary?.total_count ?? 0) + (post.shares?.count ?? 0);
+    const attachment = post.attachments?.data?.[0];
+    rows.push({
+      project_id: connection.project_id,
+      social_connection_id: connection.id,
+      provider: "meta",
+      platform: "Facebook",
+      account_id: connection.account_id,
+      external_post_id: post.id,
+      content_type: facebookContentType(post),
+      title: shortPostMessage(post.message),
+      permalink: post.permalink_url ?? null,
+      thumbnail_url: post.full_picture ?? attachment?.media?.image?.src ?? null,
+      published_at: publishedAt.toISOString(),
+      views: values.get("post_impressions") ?? 0,
+      reach: values.get("post_impressions_unique") ?? 0,
+      interactions,
+      collected_at: new Date().toISOString(),
+    });
+  }
+  return rows;
+}
+
 export async function syncMetaConnection(connection: MetaConnection, requestedDays = 30) {
   const days = Math.min(Math.max(Math.round(requestedDays), 1), MAX_LOOKBACK_DAYS);
   const end = new Date();
@@ -152,7 +227,7 @@ export async function syncMetaConnection(connection: MetaConnection, requestedDa
   const token = decryptSocialToken(connection.encrypted_access_token);
   const rows: Array<{ project_id: string; social_connection_id: string; provider: "meta"; platform: "Facebook" | "Instagram"; account_id: string; metric: string; metric_date: string; value: number; collected_at: string }> = [];
   const errors: string[] = [];
-  let contentRows: Awaited<ReturnType<typeof syncInstagramContent>> = [];
+  let contentRows: ContentMetricRow[] = [];
 
   // Metrics are fetched separately. Meta can make a metric unavailable for an
   // account type without preventing the rest of the dashboard from updating.
@@ -207,6 +282,13 @@ export async function syncMetaConnection(connection: MetaConnection, requestedDa
       contentRows = await syncInstagramContent(connection, token, start);
     } catch (error) {
       errors.push(error instanceof Error ? error.message : "Unable to retrieve Instagram content performance.");
+    }
+  }
+  if (connection.platform === "Facebook") {
+    try {
+      contentRows = await syncFacebookContent(connection, token, start);
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : "Unable to retrieve Facebook content performance.");
     }
   }
 
