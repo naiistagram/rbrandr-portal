@@ -18,7 +18,9 @@ export async function GET(request: NextRequest) {
   if (!projectIds.length) return NextResponse.json({ metrics: [], content: [], connections: [] });
 
   const requestedDays = Number(request.nextUrl.searchParams.get("days") ?? 30);
-  const days = Number.isFinite(requestedDays) ? Math.min(Math.max(Math.round(requestedDays), 7), 90) : 30;
+  // The client requests two reporting windows so it can compare the selected
+  // period with the equal-length period immediately before it.
+  const days = Number.isFinite(requestedDays) ? Math.min(Math.max(Math.round(requestedDays), 7), 180) : 30;
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - days);
   since.setUTCHours(0, 0, 0, 0);
