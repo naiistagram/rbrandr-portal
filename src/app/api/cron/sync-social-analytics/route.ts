@@ -25,9 +25,15 @@ export async function GET(request: NextRequest) {
       const { error: upsertError } = await admin.from("social_metric_snapshots").upsert(result.rows, { onConflict: "project_id,platform,account_id,metric,metric_date" });
       if (upsertError) result.errors.push(upsertError.message);
     }
+    if (result.contentRows.length) {
+      const { error: contentUpsertError } = await admin.from("social_content_metrics").upsert(result.contentRows, {
+        onConflict: "project_id,platform,account_id,external_post_id",
+      });
+      if (contentUpsertError) result.errors.push(contentUpsertError.message);
+    }
     const status = result.errors.length === 0 ? "success" : result.rows.length ? "partial" : "failed";
     await admin.from("social_analytics_syncs").insert({ project_id: connection.project_id, provider: "meta", status, metrics_written: result.rows.length, message: result.errors.join(" ").slice(0, 1800) || null });
-    outcomes.push({ connectionId: connection.id, status, metricsWritten: result.rows.length });
+    outcomes.push({ connectionId: connection.id, status, metricsWritten: result.rows.length, contentWritten: result.contentRows.length });
   }
   return NextResponse.json({ processed: outcomes.length, outcomes });
 }

@@ -22,8 +22,10 @@ export async function POST(request: NextRequest) {
 
   const results = await Promise.all((connections as MetaConnection[]).map((connection) => syncMetaConnection(connection, days)));
   const rows = results.flatMap((result) => result.rows);
+  const contentRows = results.flatMap((result) => result.contentRows);
   const errors = results.flatMap((result) => result.errors);
   let written = 0;
+  let contentWritten = 0;
   if (rows.length) {
     const { error: upsertError } = await auth.admin.from("social_metric_snapshots").upsert(rows, {
       onConflict: "project_id,platform,account_id,metric,metric_date",
@@ -31,11 +33,18 @@ export async function POST(request: NextRequest) {
     if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
     written = rows.length;
   }
+  if (contentRows.length) {
+    const { error: contentUpsertError } = await auth.admin.from("social_content_metrics").upsert(contentRows, {
+      onConflict: "project_id,platform,account_id,external_post_id",
+    });
+    if (contentUpsertError) return NextResponse.json({ error: contentUpsertError.message }, { status: 500 });
+    contentWritten = contentRows.length;
+  }
 
   const status = errors.length === 0 ? "success" : written > 0 ? "partial" : "failed";
   await auth.admin.from("social_analytics_syncs").insert({
     project_id: body.projectId, provider: "meta", status, metrics_written: written,
     message: errors.length ? errors.join(" ").slice(0, 1800) : null,
   });
-  return NextResponse.json({ status, metricsWritten: written, errors });
+  return NextResponse.json({ status, metricsWritten: written, contentWritten, errors });
 }

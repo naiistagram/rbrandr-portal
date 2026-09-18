@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, CalendarDays, Eye, Link2, MousePointer2, Users } from "lucide-react";
+import { Activity, BarChart3, CalendarDays, Eye, Film, ImageIcon, Layers, Link2, MousePointer2, Users } from "lucide-react";
 import { analyticsMetricLabels } from "@/lib/social-analytics-labels";
 
 type Metric = { project_id: string; platform: "Facebook" | "Instagram" | "LinkedIn"; metric: string; metric_date: string; value: number | string };
 type Connection = { project_id: string; platform: "Facebook" | "Instagram"; account_name: string };
+type ContentPost = {
+  project_id: string; platform: "Facebook" | "Instagram" | "LinkedIn"; external_post_id: string; content_type: "post" | "reel" | "carousel" | "story";
+  title: string; permalink: string | null; thumbnail_url: string | null; published_at: string; views: number | string; reach: number | string; interactions: number | string;
+};
 type Sync = { status: "success" | "partial" | "failed"; metrics_written: number; message: string | null; created_at: string } | null;
 
 const metricIcons: Record<string, typeof Eye> = {
@@ -18,6 +22,13 @@ const metricIcons: Record<string, typeof Eye> = {
   link_clicks: Link2,
   reactions: Activity,
 };
+
+const contentTypeMeta = {
+  post: { label: "Posts", icon: ImageIcon },
+  reel: { label: "Reels", icon: Film },
+  carousel: { label: "Carousels", icon: Layers },
+  story: { label: "Stories", icon: ImageIcon },
+} as const;
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0, notation: value >= 10000 ? "compact" : "standard" }).format(value);
@@ -71,6 +82,7 @@ export function PerformanceDashboard() {
   const [days, setDays] = useState(30);
   const [platform, setPlatform] = useState<string>("all");
   const [metrics, setMetrics] = useState<Metric[]>([]);
+  const [content, setContent] = useState<ContentPost[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [latestSync, setLatestSync] = useState<Sync>(null);
   const [loading, setLoading] = useState(true);
@@ -84,6 +96,7 @@ export function PerformanceDashboard() {
         if (!response.ok) throw new Error(body.error ?? "Performance data could not be loaded.");
         if (!cancelled) {
           setMetrics(body.metrics ?? []);
+          setContent(body.content ?? []);
           setConnections(body.connections ?? []);
           setLatestSync(body.latestSync ?? null);
           setError("");
@@ -96,6 +109,7 @@ export function PerformanceDashboard() {
 
   const platforms = useMemo(() => [...new Set([...connections.map((connection) => connection.platform), ...metrics.map((metric) => metric.platform)])], [connections, metrics]);
   const visibleMetrics = useMemo(() => platform === "all" ? metrics : metrics.filter((metric) => metric.platform === platform), [metrics, platform]);
+  const visibleContent = useMemo(() => platform === "all" ? content : content.filter((item) => item.platform === platform), [content, platform]);
   const totals = useMemo(() => {
     const values = new Map<string, number>();
     for (const metric of visibleMetrics) values.set(metric.metric, (values.get(metric.metric) ?? 0) + Number(metric.value));
@@ -116,6 +130,20 @@ export function PerformanceDashboard() {
   }, [chartMetric, visibleMetrics]);
   const formatShare = useMemo(() => cards.map((metric) => ({ metric, value: totals.get(metric) ?? 0 })).filter((item) => item.value > 0), [cards, totals]);
   const shareMax = Math.max(...formatShare.map((item) => item.value), 1);
+  const contentTypes = useMemo(() => {
+    const groups = new Map<string, { count: number; views: number }>();
+    for (const item of visibleContent) {
+      const current = groups.get(item.content_type) ?? { count: 0, views: 0 };
+      current.count += 1;
+      current.views += Number(item.views);
+      groups.set(item.content_type, current);
+    }
+    return [...groups.entries()].map(([type, values]) => ({ type: type as keyof typeof contentTypeMeta, ...values })).sort((a, b) => b.views - a.views || b.count - a.count);
+  }, [visibleContent]);
+  const contentTypeMax = Math.max(...contentTypes.map((item) => item.views), 1);
+  const topContent = useMemo(() => [...visibleContent]
+    .sort((a, b) => (Number(b.views) - Number(a.views)) || (Number(b.interactions) - Number(a.interactions)))
+    .slice(0, 5), [visibleContent]);
 
   return (
     <section className="mb-8 overflow-hidden rounded-2xl border border-[var(--border)] bg-[radial-gradient(circle_at_80%_-20%,rgba(180,0,167,0.18),transparent_38%),var(--surface)] p-5 sm:p-7">
@@ -156,6 +184,26 @@ export function PerformanceDashboard() {
             <Trend values={dailyValues} label={analyticsMetricLabels[chartMetric ?? ""] ?? "Performance"} />
             <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6"><p className="text-sm font-semibold text-[var(--foreground)]">Performance mix</p><p className="mt-1 text-xs text-[var(--foreground-muted)]">Reported actions in this period</p><div className="mt-7 space-y-4">{formatShare.map(({ metric, value }) => <div key={metric}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="text-[var(--foreground-muted)]">{analyticsMetricLabels[metric] ?? metric}</span><span className="font-semibold tabular-nums text-[var(--foreground)]">{formatNumber(value)}</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--surface-2)]"><div className="h-full rounded-full bg-gradient-to-r from-[#ed0194] to-[#7c3aed]" style={{ width: `${(value / shareMax) * 100}%` }} /></div></div>)}</div></div>
           </div>
+          {visibleContent.length > 0 && <div className="mt-4 grid gap-4 lg:grid-cols-[0.78fr_1.22fr]">
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+              <p className="text-sm font-semibold text-[var(--foreground)]">By content type</p>
+              <p className="mt-1 text-xs text-[var(--foreground-muted)]">Published content in this reporting period</p>
+              <div className="mt-6 space-y-4">{contentTypes.map(({ type, count, views }) => {
+                const meta = contentTypeMeta[type];
+                const Icon = meta.icon;
+                return <div key={type}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="flex items-center gap-2 text-[var(--foreground-muted)]"><Icon className="h-3.5 w-3.5 text-[var(--accent)]" />{meta.label}<span className="rounded-full bg-white/5 px-1.5 py-0.5 text-[10px]">{count}</span></span><span className="font-semibold tabular-nums text-[var(--foreground)]">{formatNumber(views)} views</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--surface-2)]"><div className="h-full rounded-full bg-gradient-to-r from-[#ed0194] to-[#7c3aed]" style={{ width: `${(views / contentTypeMax) * 100}%` }} /></div></div>;
+              })}</div>
+            </div>
+            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-semibold text-[var(--foreground)]">Top content</p><p className="mt-1 text-xs text-[var(--foreground-muted)]">Best performers, ranked by views</p></div><span className="text-xs text-[var(--foreground-subtle)]">{topContent.length} shown</span></div>
+              <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">{topContent.map((item) => {
+                const type = contentTypeMeta[item.content_type] ?? contentTypeMeta.post;
+                const Icon = type.icon;
+                const post = <div className="group overflow-hidden rounded-xl border border-white/8 bg-black/15"><div className="relative aspect-[0.82] overflow-hidden bg-gradient-to-br from-[#531246] to-[#28133a]">{item.thumbnail_url ? <div className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-105" style={{ backgroundImage: `url(${item.thumbnail_url})` }} /> : <div className="absolute inset-0 flex items-center justify-center"><Icon className="h-6 w-6 text-white/50" /></div>}<span className="absolute left-2 top-2 rounded-md bg-black/65 px-1.5 py-1 text-[10px] font-medium text-white">{type.label.slice(0, -1)}</span><span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-1.5 py-1 text-xs font-semibold text-white">{formatNumber(Number(item.views))}</span></div><div className="p-2.5"><p className="line-clamp-2 text-xs font-medium leading-snug text-[var(--foreground)]">{item.title}</p><p className="mt-1 text-[10px] text-[var(--foreground-muted)]">{formatNumber(Number(item.interactions))} interactions</p></div></div>;
+                return item.permalink ? <a key={item.external_post_id} href={item.permalink} target="_blank" rel="noreferrer" className="block">{post}</a> : <div key={item.external_post_id}>{post}</div>;
+              })}</div>
+            </div>
+          </div>}
           {latestSync && <p className="mt-5 text-xs text-[var(--foreground-subtle)]">Last sync {new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(latestSync.created_at))}{latestSync.status === "partial" ? " · Some account metrics were unavailable." : ""}</p>}
         </>
       )}

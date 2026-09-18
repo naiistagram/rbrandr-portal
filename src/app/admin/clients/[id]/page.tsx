@@ -366,7 +366,8 @@ export default function ClientDetailPage() {
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.status !== "failed") {
       const suffix = data.status === "partial" ? " Some metrics were not available from Meta." : "";
-      setAnalyticsSyncMessage(`Updated ${data.metricsWritten ?? 0} daily performance points.${suffix}`);
+      const contentSuffix = data.contentWritten ? ` Refreshed ${data.contentWritten} post insights.` : "";
+      setAnalyticsSyncMessage(`Updated ${data.metricsWritten ?? 0} daily performance points.${contentSuffix}${suffix}`);
     } else {
       setAnalyticsSyncMessage(data.errors?.[0] ?? data.error ?? "Performance sync failed.");
     }
