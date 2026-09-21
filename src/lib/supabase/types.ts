@@ -7,6 +7,7 @@ export interface Profile {
   full_name: string;
   avatar_url: string | null;
   role: "admin" | "client";
+  email_opted_out: boolean;
   client_role: "ceo" | "member";
   job_title: string | null;
   company_name: string | null;

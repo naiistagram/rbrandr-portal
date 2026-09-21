@@ -41,6 +41,7 @@ create table public.profiles (
   full_name text not null,
   avatar_url text,
   role text not null default 'client' check (role in ('admin', 'client')),
+  email_opted_out boolean not null default false,
   company_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

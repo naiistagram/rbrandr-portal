@@ -120,13 +120,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
-  const { service_type, client_role, job_title, company_name } = body;
+  const { service_type, client_role, job_title, company_name, email_opted_out } = body;
 
   const updates: Record<string, unknown> = {};
   if (service_type !== undefined) updates.service_type = service_type;
   if (client_role !== undefined) updates.client_role = client_role;
   if (job_title !== undefined) updates.job_title = job_title?.trim() || null;
   if (company_name !== undefined) updates.company_name = company_name?.trim() || null;
+  if (email_opted_out !== undefined) {
+    if (typeof email_opted_out !== "boolean") {
+      return NextResponse.json({ error: "email_opted_out must be a boolean" }, { status: 400 });
+    }
+    updates.email_opted_out = email_opted_out;
+  }
 
   if (Object.keys(updates).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
 

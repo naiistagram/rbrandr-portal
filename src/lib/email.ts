@@ -31,23 +31,23 @@ export async function getProjectMemberEmails(
 
   const { data: profiles } = await admin
     .from("profiles")
-    .select("email, client_role")
+    .select("email, client_role, email_opted_out")
     .in("id", userIds);
 
   if (!profiles) return [];
 
   return ceoOnly
-    ? profiles.filter((p) => p.client_role === "ceo").map((p) => p.email)
-    : profiles.map((p) => p.email);
+    ? profiles.filter((p) => p.client_role === "ceo" && !p.email_opted_out).map((p) => p.email)
+    : profiles.filter((p) => !p.email_opted_out).map((p) => p.email);
 }
 
 export async function getAdminEmails(): Promise<string[]> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("profiles")
-    .select("email")
+    .select("email, email_opted_out")
     .eq("role", "admin");
-  return data?.map((p) => p.email) ?? [];
+  return data?.filter((p) => !p.email_opted_out).map((p) => p.email) ?? [];
 }
 
 export function buildEmailHtml(params: {
@@ -161,9 +161,20 @@ export async function sendPortalEmail(params: {
   const { to, subject, html } = params;
   if (to.length === 0) return;
 
+  const admin = createAdminClient();
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("email, email_opted_out")
+    .in("email", to);
+  const optedOut = new Set(
+    (profiles ?? []).filter((profile) => profile.email_opted_out).map((profile) => profile.email.toLowerCase())
+  );
+  const recipients = [...new Set(to)].filter((email) => !optedOut.has(email.toLowerCase()));
+  if (recipients.length === 0) return;
+
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const { error } = await resend.emails.send({ from: FROM, to, subject, html });
+    const { error } = await resend.emails.send({ from: FROM, to: recipients, subject, html });
     if (error) console.error("[sendPortalEmail] Resend error:", error);
   } catch (err) {
     console.error("[sendPortalEmail] Unhandled error:", err);

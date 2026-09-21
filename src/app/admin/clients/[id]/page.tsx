@@ -518,7 +518,7 @@ export default function ClientDetailPage() {
     setSavingServiceType(false);
   }
 
-  async function handleSaveClientProfile(fields: { client_role?: string; job_title?: string; company_name?: string }) {
+  async function handleSaveClientProfile(fields: { client_role?: string; job_title?: string; company_name?: string; email_opted_out?: boolean }) {
     setSavingProfile(true);
     await fetch(`/api/admin/clients/${clientId}`, {
       method: "PATCH",
@@ -1288,6 +1288,27 @@ export default function ClientDetailPage() {
                   placeholder="e.g. Marketing Manager"
                   className="text-xs px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--accent)] transition-all w-full placeholder:text-[var(--foreground-subtle)]"
                 />
+              </div>
+              <div className="col-span-2 flex items-center justify-between gap-4 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-3">
+                <div>
+                  <p className="text-sm font-medium text-[var(--foreground)]">Email notifications</p>
+                  <p className="mt-0.5 text-xs text-[var(--foreground-subtle)]">{client.email_opted_out ? "Opted out — no portal notifications will be sent." : "Enabled — this person receives portal notifications."}</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={!client.email_opted_out}
+                  aria-label={`Email notifications for ${client.full_name}`}
+                  disabled={savingProfile}
+                  onClick={() => {
+                    const email_opted_out = !client.email_opted_out;
+                    setClient((current) => current ? { ...current, email_opted_out } : current);
+                    handleSaveClientProfile({ email_opted_out });
+                  }}
+                  className={`relative h-6 w-11 rounded-full transition-colors disabled:opacity-50 ${client.email_opted_out ? "bg-zinc-600" : "bg-[var(--accent)]"}`}
+                >
+                  <span className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${client.email_opted_out ? "translate-x-0" : "translate-x-5"}`} />
+                </button>
               </div>
               {savingProfile && (
                 <p className="col-span-2 text-xs text-[var(--foreground-subtle)]">Saving…</p>
