@@ -272,12 +272,9 @@ export default async function CompanyPage({
                             <p className="text-[10px] text-[var(--foreground-subtle)]">{c.job_title}</p>
                           )}
                         </div>
-                        <span className={cn(
-                          "text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0",
-                          c.client_role === "ceo" ? "bg-emerald-400/10 text-emerald-400" : "bg-zinc-500/10 text-zinc-400"
-                        )}>
-                          {c.client_role === "ceo" ? "CEO" : "member"}
-                        </span>
+                        {(projects ?? []).some((project) => project.client_id === c.id) && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20">(main)</span>
+                        )}
                       </div>
                       {teamMembers.length > 0 && (
                         <div className="space-y-1 pl-12">

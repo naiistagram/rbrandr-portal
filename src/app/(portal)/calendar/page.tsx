@@ -41,6 +41,7 @@ import { Topbar } from "@/components/layout/topbar";
 import { FileViewer } from "@/components/ui/file-viewer";
 import { cn, STATUS_CONFIG, formatDate, formatTime } from "@/lib/utils";
 import { PLATFORM_CONFIG } from "@/lib/content-display";
+import { DEFAULT_MONTHLY_POST_TARGET, isPlannedSocialPost } from "@/lib/monthly-cadence";
 import type { ContentItem } from "@/lib/supabase/types";
 
 type ContentStatus = ContentItem["status"];
@@ -121,6 +122,7 @@ export default function CalendarPage() {
   const supabase = createClient();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [items, setItems] = useState<ContentItem[]>([]);
+  const [monthlyTarget, setMonthlyTarget] = useState(DEFAULT_MONTHLY_POST_TARGET);
   const [selected, setSelected] = useState<ContentItem | null>(null);
   const [feedback, setFeedback] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -175,6 +177,7 @@ export default function CalendarPage() {
       if (res.ok) {
         const json = await res.json();
         if (json.projectId) setProjectId(json.projectId);
+        if (Number.isInteger(json.monthlyPostTarget) && json.monthlyPostTarget > 0) setMonthlyTarget(json.monthlyPostTarget);
         const sorted = (json.content ?? []).sort((a: { scheduled_date: string | null }, b: { scheduled_date: string | null }) => {
           if (!a.scheduled_date && !b.scheduled_date) return 0;
           if (!a.scheduled_date) return 1;
@@ -284,6 +287,11 @@ export default function CalendarPage() {
   const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const monthDays = eachDayOfInterval({ start: calStart, end: calEnd });
+  const monthKey = format(currentDate, "yyyy-MM");
+  const monthlyPosts = items.filter((item) => isPlannedSocialPost(item, monthKey));
+  const plannedPosts = monthlyPosts.length;
+  const awaitingReview = monthlyPosts.filter((item) => item.status === "in_review").length;
+  const publishedThisMonth = monthlyPosts.filter((item) => item.status === "published").length;
 
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
@@ -587,6 +595,23 @@ export default function CalendarPage() {
               )}
             </div>
           </div>
+
+          <section aria-label={`At a glance for ${format(currentDate, "MMMM yyyy")}`} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--foreground-muted)]">At a glance</h2>
+              <span className="text-xs text-[var(--foreground-subtle)]">{format(currentDate, "MMMM yyyy")}</span>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-[var(--foreground-muted)]">Planned social posts</p>
+                <p className="mt-1 text-2xl font-bold text-[var(--foreground)]">{plannedPosts}<span className="text-base font-medium text-[var(--foreground-subtle)]"> / {monthlyTarget}</span></p>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]"><div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${Math.min(100, plannedPosts / monthlyTarget * 100)}%` }} /></div>
+                <p className="mt-1 text-[11px] text-[var(--foreground-subtle)]">Your target · count starts fresh each month</p>
+              </div>
+              <div className="border-t border-[var(--border)] pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0"><Clock className="h-4 w-4 text-amber-400" /><p className="mt-2 text-2xl font-bold text-[var(--foreground)]">{awaitingReview}</p><p className="text-xs text-[var(--foreground-muted)]">Awaiting your review</p></div>
+              <div className="border-t border-[var(--border)] pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0"><CheckCircle2 className="h-4 w-4 text-emerald-400" /><p className="mt-2 text-2xl font-bold text-[var(--foreground)]">{publishedThisMonth}</p><p className="text-xs text-[var(--foreground-muted)]">Published this month</p></div>
+            </div>
+          </section>
 
           {/* ── MONTH VIEW ── */}
           {view === "month" && (

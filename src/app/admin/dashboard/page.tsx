@@ -5,6 +5,7 @@ import { Users, FolderOpen, Clock, Plus, ArrowRight, Send, Inbox } from "lucide-
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { AdminDashboardClient } from "./dashboard-client";
+import { currentLondonMonth, isPlannedSocialPost, targetsByClient } from "@/lib/monthly-cadence";
 
 export const dynamic = "force-dynamic";
 
@@ -14,32 +15,98 @@ export default async function AdminDashboardPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
+  const currentMonth = currentLondonMonth();
 
   const [
     { data: clients },
     { data: projects },
+    { data: projectMembers },
     { data: contentInReview },
     { data: openTickets },
     { data: submittedForms },
     { data: publishedContent },
     { data: clientDraftContent },
     { data: recentlyUpdated },
+    { data: monthlyContent },
   ] = await Promise.all([
     admin.from("profiles").select("*").eq("role", "client").order("created_at", { ascending: false }),
-    admin.from("projects").select("*").eq("status", "active"),
+    admin.from("projects").select("id, client_id, brief, status"),
+    admin.from("project_members").select("project_id, user_id"),
     admin.from("content_items").select("*, projects(id, client_id, name, profiles(full_name, company_name))").eq("status", "in_review").order("updated_at", { ascending: false }).limit(5),
     admin.from("tickets").select("*, projects(id, client_id, name, profiles(full_name, company_name))").eq("status", "open").order("created_at", { ascending: false }).limit(5),
     admin.from("forms").select("*, projects(id, client_id, name, profiles(full_name, company_name))").eq("status", "submitted").order("submitted_at", { ascending: false }).limit(5),
     admin.from("content_items").select("*, projects(id, client_id, name, profiles(full_name, company_name))").eq("status", "published").order("updated_at", { ascending: false }).limit(5),
     admin.from("content_items").select("*, projects(id, client_id, name, profiles(full_name, company_name))").eq("status", "draft").order("created_at", { ascending: false }).limit(5),
     admin.from("content_items").select("*, projects(id, client_id, name, profiles(full_name, company_name))").not("status", "eq", "draft").order("updated_at", { ascending: false }).limit(8),
+    admin.from("content_items").select("project_id, content_type, status, scheduled_date, publish_at")
+      .gte("scheduled_date", currentMonth.monthStart).lt("scheduled_date", currentMonth.nextMonthStart),
   ]);
+
+  const allProjects = projects ?? [];
+  const ownerByProject = new Map(allProjects.map((project) => [project.id, project.client_id]));
+  const clientById = new Map((clients ?? []).map((client) => [client.id, client]));
+  const owners = new Set(allProjects.map((project) => project.client_id));
+  const membersByOwner = new Map<string, Set<string>>();
+  const sharedMemberIds = new Set<string>();
+  for (const member of projectMembers ?? []) {
+    const ownerId = ownerByProject.get(member.project_id);
+    if (!ownerId) continue;
+    sharedMemberIds.add(member.user_id);
+    if (!membersByOwner.has(ownerId)) membersByOwner.set(ownerId, new Set());
+    membersByOwner.get(ownerId)?.add(member.user_id);
+  }
+  const companyAccounts = [
+    ...Array.from(owners, (ownerId) => {
+      const owner = clientById.get(ownerId);
+      return {
+        id: ownerId,
+        name: owner?.company_name?.trim() || owner?.full_name || "Client company",
+        memberNames: [owner?.full_name ?? "", ...Array.from(membersByOwner.get(ownerId) ?? [], (memberId) => clientById.get(memberId)?.full_name ?? "")],
+      };
+    }),
+    ...(clients ?? []).filter((client) => !owners.has(client.id) && !sharedMemberIds.has(client.id)).map((client) => ({
+      id: client.id,
+      name: client.company_name?.trim() || client.full_name,
+      memberNames: [client.full_name],
+    })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+  const companyNameCounts = new Map<string, number>();
+  for (const account of companyAccounts) {
+    const key = account.name.toLocaleLowerCase();
+    companyNameCounts.set(key, (companyNameCounts.get(key) ?? 0) + 1);
+  }
+  const companyFilters = companyAccounts.map((account) => ({
+    ...account,
+    displayName: (companyNameCounts.get(account.name.toLocaleLowerCase()) ?? 0) > 1
+      ? `${account.name} · ${clientById.get(account.id)?.full_name ?? "Account"}`
+      : account.name,
+  }));
+  const relevantOwners = new Set(allProjects.filter((project) => project.status === "active").map((project) => project.client_id));
+  for (const item of monthlyContent ?? []) {
+    const ownerId = ownerByProject.get(item.project_id);
+    if (ownerId) relevantOwners.add(ownerId);
+  }
+  const targets = targetsByClient(allProjects.filter((project) => relevantOwners.has(project.client_id)));
+  const monthlyProgress = Array.from(targets, ([clientId, target]) => ({
+    clientId, target, planned: 0, inReview: 0, published: 0, scheduled: 0, readyToSchedule: 0,
+  }));
+  const progressByClient = new Map(monthlyProgress.map((progress) => [progress.clientId, progress]));
+  for (const item of monthlyContent ?? []) {
+    if (!isPlannedSocialPost(item, currentMonth.monthKey)) continue;
+    const progress = progressByClient.get(ownerByProject.get(item.project_id) ?? "");
+    if (!progress) continue;
+    progress.planned += 1;
+    if (item.status === "in_review") progress.inReview += 1;
+    if (item.status === "published") progress.published += 1;
+    if (item.status === "approved" && item.publish_at) progress.scheduled += 1;
+    if (item.status === "approved" && !item.publish_at) progress.readyToSchedule += 1;
+  }
 
   const recentClients = (clients ?? []).slice(0, 5);
 
   const stats = [
-    { label: "Total Clients",    value: clients?.length ?? 0,          icon: Users,   color: "text-[var(--accent)]",  bg: "bg-[var(--accent-subtle)]" },
-    { label: "Active Projects",  value: projects?.length ?? 0,         icon: FolderOpen, color: "text-emerald-400",   bg: "bg-emerald-400/10" },
+    { label: "Client Accounts", value: companyFilters.length, icon: Users, color: "text-[var(--accent)]", bg: "bg-[var(--accent-subtle)]" },
+    { label: "Active Projects",  value: allProjects.filter((project) => project.status === "active").length, icon: FolderOpen, color: "text-emerald-400", bg: "bg-emerald-400/10" },
     { label: "Content Requests", value: clientDraftContent?.length ?? 0, icon: Inbox,  color: "text-violet-400",      bg: "bg-violet-400/10" },
     { label: "Awaiting Review",  value: contentInReview?.length ?? 0,  icon: Clock,   color: "text-purple-400",       bg: "bg-purple-400/10" },
     { label: "Published Posts",  value: publishedContent?.length ?? 0, icon: Send,    color: "text-sky-400",          bg: "bg-sky-400/10" },
@@ -68,12 +135,14 @@ export default async function AdminDashboardPage() {
 
         {/* Filterable activity sections */}
         <AdminDashboardClient
-          clients={(clients ?? []).map((c) => ({ id: c.id, full_name: c.full_name, company_name: c.company_name }))}
+          companies={companyFilters}
           clientDraftContent={clientDraftContent ?? []}
           recentlyUpdated={recentlyUpdated ?? []}
           contentInReview={contentInReview ?? []}
           openTickets={openTickets ?? []}
           submittedForms={submittedForms ?? []}
+          monthLabel={currentMonth.label}
+          monthlyProgress={monthlyProgress}
         />
 
         {/* Recent clients */}
@@ -104,7 +173,10 @@ export default async function AdminDashboardPage() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--foreground)] truncate">{client.full_name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-[var(--foreground)] truncate">{client.full_name}</p>
+                      {owners.has(client.id) && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20 whitespace-nowrap">(main)</span>}
+                    </div>
                     <p className="text-xs text-[var(--foreground-subtle)] truncate">{client.company_name ?? client.email}</p>
                   </div>
                   <p className="text-xs text-[var(--foreground-subtle)] flex-shrink-0">{formatDate(client.created_at)}</p>

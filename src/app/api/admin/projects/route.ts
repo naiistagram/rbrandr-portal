@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { monthlyPostTarget } from "@/lib/monthly-cadence";
 
 async function verifyAdmin() {
   const supabase = await createClient();
@@ -23,9 +24,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "clientId and name are required" }, { status: 400 });
   }
 
+  const { data: existingProjects, error: existingError } = await admin.from("projects")
+    .select("brief").eq("client_id", clientId);
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+  const configuredProject = (existingProjects ?? []).find((entry) => entry.brief && typeof entry.brief === "object" && !Array.isArray(entry.brief) && "monthly_post_target" in entry.brief);
+  const target = monthlyPostTarget(configuredProject?.brief);
+  const projectBrief = brief && typeof brief === "object" && !Array.isArray(brief) ? brief : {};
+
   const { data, error } = await admin
     .from("projects")
-    .insert({ client_id: clientId, name, service_type: service_type || "social_media", goals: goals || null, competition: competition || null, status: status || "draft", kpis: kpis ?? null, brief: brief ?? null })
+    .insert({ client_id: clientId, name, service_type: service_type || "social_media", goals: goals || null, competition: competition || null, status: status || "draft", kpis: kpis ?? null, brief: { ...projectBrief, monthly_post_target: target } })
     .select()
     .single();
 

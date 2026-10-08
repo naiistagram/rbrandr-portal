@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendContentStatusEmail } from "@/lib/email";
 import { signStorageUrl } from "@/lib/storage-url";
+import { monthlyPostTarget } from "@/lib/monthly-cadence";
 
 const CONTENT_TYPES = ["post", "story", "reel", "carousel", "ad", "email", "blog", "other"];
 
@@ -120,7 +121,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json();
-  const { service_type, client_role, job_title, company_name, email_opted_out } = body;
+  const { service_type, client_role, job_title, company_name, email_opted_out, monthly_post_target } = body;
 
   const updates: Record<string, unknown> = {};
   if (service_type !== undefined) updates.service_type = service_type;
@@ -134,10 +135,27 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updates.email_opted_out = email_opted_out;
   }
 
-  if (Object.keys(updates).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  if (monthly_post_target !== undefined) {
+    if (!Number.isInteger(monthly_post_target) || monthly_post_target < 1 || monthly_post_target > 1000) {
+      return NextResponse.json({ error: "Monthly post target must be a whole number from 1 to 1,000" }, { status: 400 });
+    }
+    const { data: ownedProjects, error: projectError } = await auth.admin
+      .from("projects").select("id, brief").eq("client_id", clientId);
+    if (projectError) return NextResponse.json({ error: projectError.message }, { status: 500 });
+    if (!ownedProjects?.length) return NextResponse.json({ error: "Create a project for this client before setting a monthly target" }, { status: 409 });
+    const results = await Promise.all(ownedProjects.map((project) => auth.admin.from("projects")
+      .update({ brief: { ...((project.brief && typeof project.brief === "object" && !Array.isArray(project.brief)) ? project.brief : {}), monthly_post_target } })
+      .eq("id", project.id)));
+    const failed = results.find((result) => result.error);
+    if (failed?.error) return NextResponse.json({ error: failed.error.message }, { status: 500 });
+  }
 
-  const { error } = await auth.admin.from("profiles").update(updates).eq("id", clientId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (Object.keys(updates).length === 0 && monthly_post_target === undefined) return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+
+  if (Object.keys(updates).length > 0) {
+    const { error } = await auth.admin.from("profiles").update(updates).eq("id", clientId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
@@ -223,8 +241,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     Promise.all((documents ?? []).map(async (document) => ({ ...document, file_url: await signStorageUrl(admin, "documents", document.file_url) }))),
   ]);
 
+  const configuredProject = (ownedProjects ?? []).find((entry) => entry.brief && typeof entry.brief === "object" && !Array.isArray(entry.brief) && "monthly_post_target" in entry.brief);
+
   return NextResponse.json({
     client,
+    monthlyPostTarget: monthlyPostTarget(configuredProject?.brief),
     projects: allProjects,
     project,
     content: content ?? [],

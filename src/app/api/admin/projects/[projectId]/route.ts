@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { monthlyPostTarget } from "@/lib/monthly-cadence";
 
 async function verifyAdmin() {
   const supabase = await createClient();
@@ -19,10 +20,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const { projectId } = await params;
   const body = await request.json();
   const { name, service_type, goals, competition, status, kpis, brief } = body;
+  const { data: currentProject, error: currentError } = await admin.from("projects")
+    .select("client_id, brief").eq("id", projectId).maybeSingle();
+  if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 });
+  if (!currentProject) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  const savedBrief = currentProject.brief && typeof currentProject.brief === "object" && !Array.isArray(currentProject.brief) ? currentProject.brief : {};
+  const nextBrief = brief && typeof brief === "object" && !Array.isArray(brief) ? brief : {};
 
   const { data, error } = await admin
     .from("projects")
-    .update({ name, service_type, goals: goals || null, competition: competition || null, status, kpis: kpis ?? null, brief: brief ?? null })
+    .update({ name, service_type, goals: goals || null, competition: competition || null, status, kpis: kpis ?? null, brief: { ...savedBrief, ...nextBrief, monthly_post_target: monthlyPostTarget(savedBrief) } })
     .eq("id", projectId)
     .select()
     .single();

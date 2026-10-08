@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowLeft, Mail, Save, Plus, X, Upload,
   FileText, ScrollText, BarChart3, Clock,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Badge, StatusDot } from "@/components/ui/badge";
 import { cn, formatDate, formatTime, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL, PLATFORM_ORDER } from "@/lib/content-display";
+import { DEFAULT_MONTHLY_POST_TARGET, targetsByClient } from "@/lib/monthly-cadence";
 import type {
   Profile, Project, ContentItem, Contract, Report,
   Asset, Document as Doc, Milestone as MS, Ticket, Form, Feedback,
@@ -98,6 +100,10 @@ export default function ClientDetailPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [monthlyTarget, setMonthlyTarget] = useState(DEFAULT_MONTHLY_POST_TARGET);
+  const [savingMonthlyTarget, setSavingMonthlyTarget] = useState(false);
+  const [monthlyTargetSaved, setMonthlyTargetSaved] = useState(false);
+  const [monthlyTargetError, setMonthlyTargetError] = useState("");
   const [content, setContent] = useState<ContentItem[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -280,6 +286,7 @@ export default function ClientDetailPage() {
     setJobTitleState(data.client?.job_title ?? "");
     setCompanyNameState(data.client?.company_name ?? "");
     setAllProjects(data.projects ?? []);
+    setMonthlyTarget(data.monthlyPostTarget ?? DEFAULT_MONTHLY_POST_TARGET);
     if (data.project) {
       setProject(data.project);
       fetchSocialConnections(data.project.id);
@@ -532,6 +539,32 @@ export default function ClientDetailPage() {
       body: JSON.stringify(fields),
     });
     setSavingProfile(false);
+  }
+
+  async function handleSaveMonthlyTarget() {
+    setSavingMonthlyTarget(true);
+    setMonthlyTargetError("");
+    setMonthlyTargetSaved(false);
+    try {
+      const response = await fetch(`/api/admin/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monthly_post_target: monthlyTarget }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not save monthly target");
+      setMonthlyTargetSaved(true);
+      const withTarget = (entry: Project): Project => ({
+        ...entry,
+        brief: { ...((entry.brief && typeof entry.brief === "object" && !Array.isArray(entry.brief)) ? entry.brief : {}), monthly_post_target: monthlyTarget },
+      });
+      setAllProjects((current) => current.map((entry) => entry.client_id === clientId ? withTarget(entry) : entry));
+      setProject((current) => current && current.client_id === clientId ? withTarget(current) : current);
+    } catch (error) {
+      setMonthlyTargetError(error instanceof Error ? error.message : "Could not save monthly target");
+    } finally {
+      setSavingMonthlyTarget(false);
+    }
   }
 
   async function handleResendInvite() {
@@ -1183,6 +1216,11 @@ export default function ClientDetailPage() {
     );
   }
 
+  const hasOwnedProject = allProjects.some((entry) => entry.client_id === clientId);
+  const sharedProjects = allProjects.filter((entry) => entry.client_id !== clientId);
+  const sharedTargets = Array.from(targetsByClient(sharedProjects));
+  const sharedTargetTotal = sharedTargets.reduce((sum, [, target]) => sum + target, 0);
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
@@ -1202,7 +1240,10 @@ export default function ClientDetailPage() {
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg font-bold text-[var(--foreground)]">{client.full_name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-[var(--foreground)]">{client.full_name}</h1>
+              {hasOwnedProject && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20 whitespace-nowrap">(main)</span>}
+            </div>
             <p className="text-sm text-[var(--foreground-muted)]">
               {client.company_name ? `${client.company_name} · ${client.email}` : client.email}
             </p>
@@ -1342,6 +1383,37 @@ export default function ClientDetailPage() {
                   {deleting ? "Deleting…" : "Delete Account"}
                 </button>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-[var(--foreground)]">Monthly posting cadence</h3>
+                  <p className="mt-1 text-xs text-[var(--foreground-muted)]">{!hasOwnedProject && sharedProjects.length > 0 ? "This client has access to an existing project. Its monthly target is managed on the owning client account." : "One target for this client account. Progress resets at the start of each calendar month."}</p>
+                </div>
+                {!hasOwnedProject && sharedProjects.length > 0 ? (
+                  <p className="text-2xl font-bold text-[var(--foreground)]">{sharedTargetTotal}<span className="ml-1 text-xs font-normal text-[var(--foreground-muted)]">posts per month{sharedTargets.length > 1 ? " across shared accounts" : ""}</span></p>
+                ) : (
+                  <div className="flex items-end gap-2">
+                    <label className="text-xs font-medium text-[var(--foreground-muted)]">
+                      Posts per month
+                      <input type="number" min={1} max={1000} step={1} value={monthlyTarget} onChange={(event) => { setMonthlyTarget(Number(event.target.value)); setMonthlyTargetSaved(false); }} className="mt-1 block w-24 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)]" />
+                    </label>
+                    <Button size="sm" disabled={!hasOwnedProject || !Number.isInteger(monthlyTarget) || monthlyTarget < 1 || monthlyTarget > 1000} loading={savingMonthlyTarget} onClick={() => void handleSaveMonthlyTarget()}>{monthlyTargetSaved ? "Saved" : "Save target"}</Button>
+                  </div>
+                )}
+              </div>
+              {!hasOwnedProject && sharedProjects.length === 0 && <p className="mt-2 text-xs text-[var(--foreground-subtle)]">Create a project for this client to save a target.</p>}
+              {!hasOwnedProject && sharedTargets.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {sharedTargets.map(([ownerId, target]) => (
+                    <Link key={ownerId} href={`/admin/clients/${ownerId}`} className="text-xs font-medium text-[var(--accent)] hover:underline">
+                      Manage {sharedProjects.find((entry) => entry.client_id === ownerId)?.name ?? "project"} target ({target}/month) →
+                    </Link>
+                  ))}
+                </div>
+              )}
+              {monthlyTargetError && <p role="alert" className="mt-2 text-xs text-red-400">{monthlyTargetError}</p>}
             </div>
 
             {/* Projects info cards */}

@@ -1,6 +1,7 @@
 import { getPreviewClient } from "@/lib/admin-preview-guard";
 import { getClientProjectScope } from "@/lib/admin-client-scope";
 import { DashboardClient } from "@/app/(portal)/dashboard/dashboard-client";
+import { currentLondonMonth, targetsByClient } from "@/lib/monthly-cadence";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,10 @@ export default async function ClientDashboardPreviewPage({
   const { projects, projectIds, ownedProjectIds } = await getClientProjectScope(admin, clientId);
 
   const isCeo = (client.client_role ?? "ceo") === "ceo";
+  const currentMonth = currentLondonMonth();
+  const target = Array.from(targetsByClient(projects).values()).reduce((sum, value) => sum + value, 0) || 15;
 
-  const [{ data: allContent }, { data: pendingForms }, { data: pendingContracts }, { data: openTickets }] =
+  const [{ data: allContent }, { data: pendingForms }, { data: pendingContracts }, { data: openTickets }, { data: monthlyContent }] =
     await Promise.all([
       projectIds.length > 0
         ? admin.from("content_items").select("*").in("project_id", projectIds).order("updated_at", { ascending: false }).limit(50)
@@ -28,6 +31,10 @@ export default async function ClientDashboardPreviewPage({
         : Promise.resolve({ data: [] }),
       projectIds.length > 0
         ? admin.from("tickets").select("id, title, status, priority").in("project_id", projectIds).eq("status", "open").limit(10)
+        : Promise.resolve({ data: [] }),
+      projectIds.length > 0
+        ? admin.from("content_items").select("id, content_type, status, scheduled_date")
+            .in("project_id", projectIds).gte("scheduled_date", currentMonth.monthStart).lt("scheduled_date", currentMonth.nextMonthStart)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -46,6 +53,10 @@ export default async function ClientDashboardPreviewPage({
         pendingForms={pendingForms ?? []}
         pendingContracts={pendingContracts ?? []}
         openTickets={openTickets ?? []}
+        monthLabel={currentMonth.label}
+        monthKey={currentMonth.monthKey}
+        monthlyTarget={target}
+        monthlyContent={monthlyContent ?? []}
         preview
       />
     </div>

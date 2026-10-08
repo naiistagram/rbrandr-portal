@@ -12,11 +12,15 @@ export async function GET() {
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const [{ data: clients }, { data: authData }] = await Promise.all([
+  const [{ data: clients, error: clientsError }, { data: authData, error: usersError }, { data: projects, error: projectsError }] = await Promise.all([
     admin.from("profiles").select("*").eq("role", "client").order("created_at", { ascending: false }),
     admin.auth.admin.listUsers({ perPage: 1000 }),
+    admin.from("projects").select("client_id"),
   ]);
+  const loadError = clientsError ?? usersError ?? projectsError;
+  if (loadError) return NextResponse.json({ error: loadError.message }, { status: 500 });
 
+  const mainAccountIds = new Set((projects ?? []).map((project) => project.client_id));
   const confirmedEmails = new Set(
     (authData?.users ?? []).filter((u) => u.email_confirmed_at).map((u) => u.email)
   );
@@ -24,6 +28,7 @@ export async function GET() {
   const clientsWithStatus = (clients ?? []).map((c) => ({
     ...c,
     email_confirmed: confirmedEmails.has(c.email),
+    is_main_account: mainAccountIds.has(c.id),
   }));
 
   return NextResponse.json({ clients: clientsWithStatus });

@@ -16,19 +16,21 @@ type CalendarContent = {
   scheduled_time: string | null;
   publish_at: string | null;
   publish_error: string | null;
-  projects: { client_id: string; name: string; profiles: { full_name: string; company_name: string | null } | null } | null;
+  projects: { client_id: string; name: string; brief: unknown; profiles: { full_name: string; company_name: string | null } | null } | null;
 };
 
 type Connection = { project_id: string; platform: "Facebook" | "Instagram" | "LinkedIn"; account_name: string };
+type AccountProject = { id: string; client_id: string; brief: unknown; status: string };
 
 export default async function AdminCalendarPage() {
   const admin = createAdminClient();
-  const [{ data: content, error: contentError }, { data: connections, error: connectionsError }] = await Promise.all([
+  const [{ data: content, error: contentError }, { data: connections, error: connectionsError }, { data: projects, error: projectsError }] = await Promise.all([
     admin
       .from("content_items")
-      .select("id, project_id, title, content_type, description, file_urls, platforms, status, scheduled_date, scheduled_time, publish_at, publish_error, projects(client_id, name, profiles(full_name, company_name))")
+      .select("id, project_id, title, content_type, description, file_urls, platforms, status, scheduled_date, scheduled_time, publish_at, publish_error, projects(client_id, name, brief, profiles(full_name, company_name))")
       .order("scheduled_date", { ascending: true }),
     admin.from("social_connections").select("project_id, platform, account_name").order("platform"),
+    admin.from("projects").select("id, client_id, brief, status"),
   ]);
 
   const calendarContent: CalendarContent[] = (content ?? []).map((item) => {
@@ -37,7 +39,7 @@ export default async function AdminCalendarPage() {
     return {
       ...item,
       platforms: item.platforms ?? [],
-      projects: project ? { client_id: project.client_id, name: project.name, profiles: profile ?? null } : null,
+      projects: project ? { client_id: project.client_id, name: project.name, brief: project.brief, profiles: profile ?? null } : null,
     } as CalendarContent;
   });
 
@@ -45,7 +47,8 @@ export default async function AdminCalendarPage() {
     <AdminPublishingCalendar
       initialContent={calendarContent}
       connections={(connections ?? []) as Connection[]}
-      loadError={contentError?.message ?? connectionsError?.message ?? null}
+      accountProjects={(projects ?? []) as AccountProject[]}
+      loadError={contentError?.message ?? connectionsError?.message ?? projectsError?.message ?? null}
     />
   );
 }

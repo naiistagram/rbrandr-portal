@@ -19,19 +19,26 @@ import {
   Radio,
   Film,
   Camera,
+  MessageSquare,
+  XCircle,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileViewer } from "@/components/ui/file-viewer";
 import { cn, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL } from "@/lib/content-display";
 import { SocialPerformanceSummary } from "@/components/dashboard/social-performance-summary";
+import { MonthlyCadenceSummary } from "@/components/dashboard/monthly-cadence-summary";
+import { isPlannedSocialPost } from "@/lib/monthly-cadence";
 import type { Project, ContentItem } from "@/lib/supabase/types";
 
 type DashboardProject = Pick<
   Project,
   "id" | "client_id" | "name" | "service_type" | "goals" | "competition" | "kpis" | "brief" | "status"
 >;
-type DashboardContent = Pick<ContentItem, "id" | "title" | "content_type" | "platforms" | "status" | "file_urls">;
+type DashboardContent = Pick<ContentItem, "id" | "project_id" | "title" | "description" | "content_type" | "platforms" | "status" | "scheduled_date" | "scheduled_time" | "file_urls" | "feedback" | "review_note">;
+type MonthlyDashboardContent = Pick<ContentItem, "id" | "content_type" | "status" | "scheduled_date">;
 type DashboardForm = { id: string; title: string };
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -63,19 +70,74 @@ interface Props {
   pendingForms: DashboardForm[];
   pendingContracts: { id: string; title: string; status: string }[];
   openTickets: { id: string; title: string; status: string; priority: string }[];
+  monthLabel: string;
+  monthKey: string;
+  monthlyTarget: number;
+  monthlyContent: MonthlyDashboardContent[];
   /** Read-only admin preview: the linked pages (tickets/content/etc.) don't
    * exist in an admin-viewable, client-scoped form, so nav links are disabled. */
   preview?: boolean;
 }
 
-export function DashboardClient({ projects, allContent, pendingForms, pendingContracts, openTickets, preview = false }: Props) {
+export function DashboardClient({ projects, allContent, pendingForms, pendingContracts, openTickets, monthLabel, monthKey, monthlyTarget, monthlyContent, preview = false }: Props) {
   const [modalProject, setModalProject] = useState<DashboardProject | null>(null);
+  const [content, setContent] = useState(allContent);
+  const [monthlyItems, setMonthlyItems] = useState(monthlyContent);
+  const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
+  const [comment, setComment] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [showMedia, setShowMedia] = useState(false);
 
-  const pendingContent = allContent.filter((c) => c.status === "in_review");
+  const selectedContent = content.find((item) => item.id === selectedContentId) ?? null;
+
+  function openContent(item: DashboardContent) {
+    setSelectedContentId(item.id);
+    setComment("");
+    setReviewError(null);
+    setReviewMessage(null);
+  }
+
+  async function submitReview(status?: "approved" | "rejected") {
+    if (!selectedContent || preview || submittingReview) return;
+    const feedback = comment.trim();
+    if (!status && !feedback) {
+      setReviewError("Write a comment before sending it.");
+      return;
+    }
+    setSubmittingReview(true);
+    setReviewError(null);
+    setReviewMessage(null);
+    try {
+      const response = await fetch("/api/content", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedContent.id, ...(status ? { status } : {}), ...(feedback ? { feedback } : {}) }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Could not save your response.");
+      const updated = result.content as DashboardContent;
+      setContent((previous) => previous.map((item) => item.id === updated.id ? updated : item));
+      setMonthlyItems((previous) => previous.map((item) => item.id === updated.id ? { ...item, status: updated.status } : item));
+      setComment("");
+      if (status) setSelectedContentId(null);
+      else setReviewMessage("Comment sent to your account manager.");
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Could not save your response.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  }
+
+  const pendingContent = content.filter((c) => c.status === "in_review");
   const contentInReview = pendingContent.length;
-  const contentApproved = allContent.filter((c) => c.status === "approved").length;
-  const contentPublished = allContent.filter((c) => c.status === "published").length;
+  const contentApproved = content.filter((c) => c.status === "approved").length;
+  const contentPublished = content.filter((c) => c.status === "published").length;
   const totalActions = contentInReview + pendingForms.length + pendingContracts.length + openTickets.length;
+  const plannedThisMonth = monthlyItems.filter((item) => isPlannedSocialPost(item, monthKey));
+  const monthlyInReview = plannedThisMonth.filter((item) => item.status === "in_review").length;
+  const monthlyPublished = plannedThisMonth.filter((item) => item.status === "published").length;
 
   const modalKpis = (modalProject?.kpis as string[] | null) ?? [];
   const modalBrief = (modalProject?.brief as Record<string, string> | null) ?? {};
@@ -126,6 +188,18 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
         </div>
       )}
 
+      <MonthlyCadenceSummary
+        monthLabel={monthLabel}
+        planned={plannedThisMonth.length}
+        target={monthlyTarget}
+        inReview={monthlyInReview}
+        published={monthlyPublished}
+        scheduled={0}
+        readyToSchedule={0}
+        audience="client"
+        preview={preview}
+      />
+
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="py-3 px-4">
@@ -134,7 +208,7 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
             <p className="text-xs text-[var(--foreground-subtle)]">Awaiting Review</p>
           </div>
           <p className="text-2xl font-bold text-[var(--foreground)]">{contentInReview}</p>
-          {contentInReview > 0 && !preview && <a href="/content" className="text-[10px] text-amber-400 hover:underline mt-0.5 block">Review now →</a>}
+          {contentInReview > 0 && !preview && <button onClick={() => openContent(pendingContent[0])} className="text-[10px] text-amber-400 hover:underline mt-0.5 block cursor-pointer">Review now →</button>}
         </Card>
         <Card className="py-3 px-4">
           <div className="flex items-center gap-2 mb-2">
@@ -211,13 +285,13 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
               const thumb = item.file_urls?.[0];
               const platCfg = item.platforms[0] ? PLATFORM_CONFIG[item.platforms[0]] : null;
               return (
-                <a
+                <button
                   key={item.id}
-                  href={preview ? undefined : "/content"}
-                  onClick={preview ? (e) => e.preventDefault() : undefined}
+                  onClick={() => openContent(item)}
+                  type="button"
                   className={cn(
-                    "group text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden transition-all",
-                    preview ? "cursor-default" : "hover:border-zinc-600"
+                    "group text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden transition-all cursor-pointer",
+                    "hover:border-zinc-600"
                   )}
                 >
                   <div className={cn(
@@ -258,7 +332,7 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
                       )}
                     </div>
                   </div>
-                </a>
+                </button>
               );
             })}
           </div>
@@ -324,6 +398,59 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
           )}
         </div>
       </Card>
+
+      {/* Review the selected post without leaving the dashboard. */}
+      {selectedContent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={() => setSelectedContentId(null)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="dashboard-review-title" className="flex w-full max-w-xl max-h-[90vh] flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4">
+              <div>
+                <p className="text-xs font-semibold text-amber-400">Awaiting your review</p>
+                <h2 id="dashboard-review-title" className="mt-1 text-lg font-bold text-[var(--foreground)]">{selectedContent.title}</h2>
+              </div>
+              <button type="button" aria-label="Close review" onClick={() => setSelectedContentId(null)} className="rounded-lg p-2 text-[var(--foreground-muted)] hover:bg-[var(--surface-2)] cursor-pointer"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">
+              <div className="flex flex-wrap gap-2 text-xs text-[var(--foreground-muted)]">
+                <span className="capitalize">{selectedContent.content_type}</span>
+                {selectedContent.platforms.length > 0 && <span>· {selectedContent.platforms.join(", ")}</span>}
+                {selectedContent.scheduled_date && <span>· Planned {new Date(`${selectedContent.scheduled_date}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{selectedContent.scheduled_time ? ` at ${selectedContent.scheduled_time.slice(0, 5)}` : ""}</span>}
+              </div>
+              {selectedContent.description && <div><p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--foreground-muted)]">Post copy</p><p className="whitespace-pre-wrap text-sm leading-relaxed text-[var(--foreground)]">{selectedContent.description}</p></div>}
+              {(selectedContent.file_urls?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--foreground-muted)]">Creative</p>
+                  {selectedContent.file_urls?.[0] && /\.(mp4|mov|webm|ogg)(\?|$)/i.test(selectedContent.file_urls[0]) ? (
+                    <video src={selectedContent.file_urls[0]} controls className="max-h-64 w-full rounded-lg bg-black object-contain" />
+                  ) : selectedContent.file_urls?.[0] && /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(selectedContent.file_urls[0]) ? (
+                    <img src={selectedContent.file_urls[0]} alt={`${selectedContent.title} creative`} className="max-h-64 w-full rounded-lg bg-[var(--surface-2)] object-contain" />
+                  ) : null}
+                  <Button type="button" size="sm" variant="outline" onClick={() => setShowMedia(true)}>View all media ({selectedContent.file_urls?.length})</Button>
+                </div>
+              )}
+              {selectedContent.review_note && <div className="rounded-lg border border-[var(--accent)]/30 bg-[var(--accent-subtle)] p-3"><p className="mb-1 text-xs font-semibold text-[var(--accent)]">Account manager note</p><p className="whitespace-pre-wrap text-sm text-[var(--foreground)]">{selectedContent.review_note}</p></div>}
+              {selectedContent.feedback && <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3"><p className="mb-1 text-xs font-semibold text-[var(--foreground-muted)]">Your comments</p><p className="whitespace-pre-wrap text-sm text-[var(--foreground)]">{selectedContent.feedback}</p></div>}
+            </div>
+            <div className="shrink-0 border-t border-[var(--border)] bg-[var(--surface)] px-5 py-4">
+              {selectedContent.status === "in_review" && (
+                <div className="space-y-3">
+                  <label htmlFor="dashboard-review-comment" className="block text-xs font-semibold uppercase tracking-wide text-[var(--foreground-muted)]">Add a comment</label>
+                  <textarea id="dashboard-review-comment" value={comment} onChange={(event) => setComment(event.target.value)} disabled={preview} maxLength={5000} rows={3} placeholder="Share a note with your account manager…" className="w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] disabled:opacity-50" />
+                  {reviewError && <p role="alert" className="text-xs text-red-400">{reviewError}</p>}
+                  {reviewMessage && <p role="status" className="text-xs text-emerald-400">{reviewMessage}</p>}
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" disabled={preview || submittingReview} onClick={() => void submitReview()}><MessageSquare className="h-4 w-4" /> Send comment</Button>
+                    <Button type="button" variant="danger" size="sm" disabled={preview || submittingReview} onClick={() => void submitReview("rejected")}><XCircle className="h-4 w-4" /> Reject</Button>
+                    <Button type="button" size="sm" disabled={preview || submittingReview} onClick={() => void submitReview("approved")} className="bg-emerald-600 hover:bg-emerald-500"><CheckCircle2 className="h-4 w-4" /> Approve</Button>
+                  </div>
+                </div>
+              )}
+              {preview && <p className="text-xs text-[var(--foreground-muted)]">Client review actions are disabled in admin preview.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+      {showMedia && selectedContent && selectedContent.file_urls && selectedContent.file_urls.length > 0 && <FileViewer files={selectedContent.file_urls} contentId={selectedContent.id} projectId={selectedContent.project_id} readOnly onClose={() => setShowMedia(false)} />}
 
       {/* ── Project detail modal ── */}
       {modalProject && (

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate, getInitials } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 
-type ClientWithStatus = Profile & { email_confirmed: boolean };
+type ClientWithStatus = Profile & { email_confirmed: boolean; is_main_account: boolean };
 
 const SERVICE_TYPES = [
   { value: "social_media", label: "Social Media" },
@@ -246,6 +246,11 @@ export default function AdminClientsClient({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-semibold text-[var(--foreground)]">{client.full_name}</p>
+                            {client.is_main_account && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent-subtle)] text-[var(--accent)] border border-[var(--accent)]/20 whitespace-nowrap">
+                                (main)
+                              </span>
+                            )}
                             {!client.email_confirmed && (
                               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 whitespace-nowrap">
                                 Awaiting setup

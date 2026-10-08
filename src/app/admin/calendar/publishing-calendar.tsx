@@ -6,6 +6,7 @@ import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMont
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, ExternalLink, ImageIcon, Radio, Send } from "lucide-react";
 import { cn, formatTime, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG } from "@/lib/content-display";
+import { isPlannedSocialPost, targetsByClient } from "@/lib/monthly-cadence";
 
 type CalendarContent = {
   id: string;
@@ -20,10 +21,11 @@ type CalendarContent = {
   scheduled_time: string | null;
   publish_at: string | null;
   publish_error: string | null;
-  projects: { client_id: string; name: string; profiles: { full_name: string; company_name: string | null } | null } | null;
+  projects: { client_id: string; name: string; brief: unknown; profiles: { full_name: string; company_name: string | null } | null } | null;
 };
 
 type Connection = { project_id: string; platform: "Facebook" | "Instagram" | "LinkedIn"; account_name: string };
+type AccountProject = { id: string; client_id: string; brief: unknown; status: string };
 
 const PUBLISHABLE_PLATFORMS = new Set(["Facebook", "Instagram", "LinkedIn"]);
 
@@ -42,7 +44,7 @@ function calendarDate(date: string) {
   return parseISO(`${date}T12:00:00`);
 }
 
-export function AdminPublishingCalendar({ initialContent, connections, loadError }: { initialContent: CalendarContent[]; connections: Connection[]; loadError: string | null }) {
+export function AdminPublishingCalendar({ initialContent, connections, accountProjects, loadError }: { initialContent: CalendarContent[]; connections: Connection[]; accountProjects: AccountProject[]; loadError: string | null }) {
   const [month, setMonth] = useState(new Date());
   const [content, setContent] = useState(initialContent);
   const [selected, setSelected] = useState<CalendarContent | null>(null);
@@ -71,8 +73,28 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
     start: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }),
     end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
   });
-  const scheduledToPublish = visibleContent.filter((item) => item.publish_at && item.status === "approved").length;
-  const readyToSchedule = visibleContent.filter((item) => item.status === "approved" && !item.publish_at).length;
+  const monthKey = format(month, "yyyy-MM");
+  const clientContent = content.filter((item) => clientFilter === "all" || clientName(item) === clientFilter);
+  const monthlyContent = clientContent.filter((item) => item.scheduled_date?.slice(0, 7) === monthKey);
+  const monthlyPosts = monthlyContent.filter((item) => isPlannedSocialPost(item, monthKey));
+  const plannedPosts = monthlyPosts.length;
+  const relevantOwners = new Set<string>();
+  if (clientFilter === "all") {
+    for (const project of accountProjects) {
+      if (project.status === "active") relevantOwners.add(project.client_id);
+    }
+    for (const item of monthlyContent) {
+      if (item.projects) relevantOwners.add(item.projects.client_id);
+    }
+  } else {
+    for (const item of clientContent) {
+      if (item.projects) relevantOwners.add(item.projects.client_id);
+    }
+  }
+  const targetByClient = targetsByClient(accountProjects.filter((project) => relevantOwners.has(project.client_id)));
+  const monthlyTarget = Array.from(targetByClient.values()).reduce((sum, value) => sum + value, 0);
+  const scheduledToPublish = monthlyPosts.filter((item) => item.publish_at && item.status === "approved").length;
+  const readyToSchedule = monthlyPosts.filter((item) => item.status === "approved" && !item.publish_at).length;
   const unscheduledContent = visibleContent.filter((item) => !item.scheduled_date);
 
   function itemsOn(day: Date) {
@@ -162,10 +184,21 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
         {loadError && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">Calendar data could not fully load: {loadError}</p>}
         {moveError && <p role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{moveError}</p>}
 
-        <section className="grid gap-3 sm:grid-cols-3">
-          <Summary icon={CalendarDays} label="Planned content" value={visibleContent.length} />
-          <Summary icon={Clock3} label="Scheduled to publish" value={scheduledToPublish} color="text-emerald-400" />
-          <Summary icon={Send} label="Approved — needs a publish time" value={readyToSchedule} color="text-amber-400" />
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--foreground-muted)]">At a glance</h2>
+            <span className="text-xs text-[var(--foreground-subtle)]">{format(month, "MMMM yyyy")} · {clientFilter === "all" ? "All clients" : clientFilter}</span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+                <p className="text-xs text-[var(--foreground-muted)]">Planned social posts</p>
+              <p className="mt-1 text-2xl font-bold text-[var(--foreground)]">{plannedPosts}<span className="text-base font-medium text-[var(--foreground-subtle)]"> / {monthlyTarget}</span></p>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-2)]"><div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${monthlyTarget ? Math.min(100, plannedPosts / monthlyTarget * 100) : 0}%` }} /></div>
+              <p className="mt-1 text-[11px] text-[var(--foreground-subtle)]">{clientFilter === "all" ? "Combined client targets" : "Client target"} · count starts fresh each month</p>
+            </div>
+            <Summary icon={Clock3} label="Scheduled to publish this month" value={scheduledToPublish} color="text-emerald-400" />
+            <Summary icon={Send} label="Approved — needs a publish time" value={readyToSchedule} color="text-amber-400" />
+          </div>
         </section>
 
         <section className="rounded-xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
@@ -282,7 +315,7 @@ function PlannerCard({ item, disabled, onClick, onDragStart, onDragEnd }: {
 }
 
 function Summary({ icon: Icon, label, value, color = "text-[var(--accent)]" }: { icon: typeof CalendarDays; label: string; value: number; color?: string }) {
-  return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"><Icon className={cn("h-4 w-4", color)} /><p className="mt-3 text-2xl font-bold text-[var(--foreground)]">{value}</p><p className="text-xs text-[var(--foreground-muted)]">{label}</p></div>;
+  return <div className="border-t border-[var(--border)] pt-3 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0"><Icon className={cn("h-4 w-4", color)} /><p className="mt-2 text-2xl font-bold text-[var(--foreground)]">{value}</p><p className="text-xs text-[var(--foreground-muted)]">{label}</p></div>;
 }
 
 function DetailPanel({ item, channels, moving, moveError, onDateChange, onClose }: { item: CalendarContent; channels: Connection[]; moving: boolean; moveError: string | null; onDateChange: (date: string | null) => void; onClose: () => void }) {

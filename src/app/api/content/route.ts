@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAdminEmails, buildEmailHtml, sendPortalEmail } from "@/lib/email";
+import { monthlyPostTarget } from "@/lib/monthly-cadence";
 
 async function getAuthenticatedUser() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
+}
+
+function escapeEmailText(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
 }
 
 // GET /api/content — fetch all content for the logged-in client or member
@@ -27,18 +32,23 @@ export async function GET() {
   ]));
 
   if (projectIds.length === 0) {
-    return NextResponse.json({ content: [], projectId: null });
+    return NextResponse.json({ content: [], projectId: null, monthlyPostTarget: 15 });
   }
 
-  const { data: content, error } = await admin
-    .from("content_items")
-    .select("*")
-    .in("project_id", projectIds)
-    .order("updated_at", { ascending: false });
+  const [{ data: content, error }, { data: scopedProjects }] = await Promise.all([
+    admin.from("content_items").select("*").in("project_id", projectIds).order("updated_at", { ascending: false }),
+    admin.from("projects").select("client_id, brief").in("id", projectIds),
+  ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ content: content ?? [], projectId: projectIds[0] });
+  const targetsByClient = new Map<string, number>();
+  for (const project of scopedProjects ?? []) {
+    if (!targetsByClient.has(project.client_id)) targetsByClient.set(project.client_id, monthlyPostTarget(project.brief));
+  }
+  const target = Array.from(targetsByClient.values()).reduce((sum, value) => sum + value, 0);
+
+  return NextResponse.json({ content: content ?? [], projectId: projectIds[0], monthlyPostTarget: target || 15 });
 }
 
 // POST /api/content — create a content item for the logged-in client
@@ -120,12 +130,15 @@ export async function PATCH(request: NextRequest) {
   if (annotationUrl !== undefined && typeof annotationUrl !== "string") {
     return NextResponse.json({ error: "Invalid annotation." }, { status: 400 });
   }
+  if (status === undefined && annotationUrl === undefined && (!feedback || !feedback.trim())) {
+    return NextResponse.json({ error: "Write a comment before sending it." }, { status: 400 });
+  }
 
   const admin = createAdminClient();
 
   const { data: item } = await admin
     .from("content_items")
-    .select("id, project_id, file_urls")
+    .select("id, project_id, status, feedback, file_urls")
     .eq("id", id)
     .single();
 
@@ -138,39 +151,52 @@ export async function PATCH(request: NextRequest) {
 
   if (!ownedProject && !membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  if ((status !== undefined || feedback !== undefined) && item.status !== "in_review") {
+    return NextResponse.json({ error: "This post is no longer in review. Refresh the page to see its latest status." }, { status: 409 });
+  }
+
   const updates: Record<string, unknown> = {};
   if (status !== undefined) updates.status = status;
-  if (feedback !== undefined) updates.feedback = feedback;
+  const newComment = typeof feedback === "string" ? feedback.trim() : "";
+  if (newComment) {
+    const combined = item.feedback ? `${item.feedback}\n\n${newComment}` : newComment;
+    if (combined.length > 5000) return NextResponse.json({ error: "Comments have reached the 5,000 character limit." }, { status: 400 });
+    updates.feedback = combined;
+  }
   if (annotationUrl !== undefined) {
     const expectedPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/assets/${item.project_id}/annotation-${id}-`;
     if (!annotationUrl.startsWith(expectedPrefix)) return NextResponse.json({ error: "Invalid annotation location." }, { status: 400 });
     updates.file_urls = [...(item.file_urls ?? []), annotationUrl];
   }
 
-  const { data, error } = await admin
+  let updateQuery = admin
     .from("content_items")
     .update(updates)
-    .eq("id", id)
+    .eq("id", id);
+  if (status !== undefined || feedback !== undefined) updateQuery = updateQuery.eq("status", "in_review");
+  const { data, error } = await updateQuery
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "This post changed while you were reviewing it. Refresh the page and try again." }, { status: 409 });
 
-  if (status === "approved" || status === "rejected") {
+  if (status === "approved" || status === "rejected" || (newComment && status === undefined)) {
     const [{ data: approver }, { data: contentProject }] = await Promise.all([
       admin.from("profiles").select("full_name, company_name").eq("id", user.id).single(),
       admin.from("projects").select("name").eq("id", data.project_id).single(),
     ]);
     const approverName = approver?.full_name ?? approver?.company_name ?? "A client";
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const label = status === "approved" ? "approved" : "rejected";
+    const label = status === "approved" ? "approved" : status === "rejected" ? "rejected" : "commented on";
+    const commentText = newComment ? ` with a comment: "${escapeEmailText(newComment)}"` : "";
     const adminEmails = await getAdminEmails();
     await sendPortalEmail({
       to: adminEmails,
       subject: `Content ${label} by client — ${data.title}`,
       html: buildEmailHtml({
         title: `Content ${label}`,
-        body: `<strong style="color:#fafafa;">${approverName}</strong>${contentProject?.name ? ` (${contentProject.name})` : ""} has <strong style="color:#fafafa;">${label}</strong> the content piece <strong style="color:#fafafa;">"${data.title}"</strong>${data.feedback ? ` with feedback: "${data.feedback}"` : ""}.`,
+        body: `<strong style="color:#fafafa;">${escapeEmailText(approverName)}</strong>${contentProject?.name ? ` (${escapeEmailText(contentProject.name)})` : ""} has <strong style="color:#fafafa;">${label}</strong> the content piece <strong style="color:#fafafa;">"${escapeEmailText(data.title)}"</strong>${commentText}.`,
         ctaText: "View in admin",
         ctaUrl: `${appUrl}/admin/clients`,
       }),

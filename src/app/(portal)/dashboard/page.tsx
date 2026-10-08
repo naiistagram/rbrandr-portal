@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/layout/topbar";
 import { DashboardClient } from "./dashboard-client";
+import { currentLondonMonth, targetsByClient } from "@/lib/monthly-cadence";
 
 export const dynamic = "force-dynamic";
 
@@ -49,16 +50,18 @@ export default async function DashboardPage() {
   ];
 
   const projectIds = projects.map((p) => p.id);
+  const currentMonth = currentLondonMonth();
+  const target = Array.from(targetsByClient(projects).values()).reduce((sum, value) => sum + value, 0) || 15;
   // Contracts only for CEO-role users who own projects directly
   const isCeo = (profile?.client_role ?? "ceo") === "ceo";
   const ownedProjectIds = ownedProjects.map((p) => p.id);
 
-  const [{ data: allContent }, { data: pendingForms }, { data: pendingContracts }, { data: openTickets }] =
+  const [{ data: allContent }, { data: pendingForms }, { data: pendingContracts }, { data: openTickets }, { data: monthlyContent }] =
     await Promise.all([
       projectIds.length > 0
         ? admin
             .from("content_items")
-            .select("id, title, content_type, platforms, status, file_urls")
+            .select("id, project_id, title, description, content_type, platforms, status, scheduled_date, scheduled_time, file_urls, feedback, review_note")
             .in("project_id", projectIds)
             .order("updated_at", { ascending: false })
             .limit(50)
@@ -72,6 +75,10 @@ export default async function DashboardPage() {
         : Promise.resolve({ data: [] }),
       projectIds.length > 0
         ? admin.from("tickets").select("id, title, status, priority").in("project_id", projectIds).eq("status", "open").limit(10)
+        : Promise.resolve({ data: [] }),
+      projectIds.length > 0
+        ? admin.from("content_items").select("id, content_type, status, scheduled_date")
+            .in("project_id", projectIds).gte("scheduled_date", currentMonth.monthStart).lt("scheduled_date", currentMonth.nextMonthStart)
         : Promise.resolve({ data: [] }),
     ]);
 
@@ -88,6 +95,10 @@ export default async function DashboardPage() {
         pendingForms={pendingForms ?? []}
         pendingContracts={pendingContracts ?? []}
         openTickets={openTickets ?? []}
+        monthLabel={currentMonth.label}
+        monthKey={currentMonth.monthKey}
+        monthlyTarget={target}
+        monthlyContent={monthlyContent ?? []}
       />
     </div>
   );
