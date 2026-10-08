@@ -208,7 +208,7 @@ export function DashboardClient({ projects, allContent, pendingForms, pendingCon
             <p className="text-xs text-[var(--foreground-subtle)]">Awaiting Review</p>
           </div>
           <p className="text-2xl font-bold text-[var(--foreground)]">{contentInReview}</p>
-          {contentInReview > 0 && !preview && <button onClick={() => openContent(pendingContent[0])} className="text-[10px] text-amber-400 hover:underline mt-0.5 block cursor-pointer">Review now →</button>}
+          {contentInReview > 0 && !preview && <a href="/content" className="text-[10px] text-amber-400 hover:underline mt-0.5 block">Review now →</a>}
         </Card>
         <Card className="py-3 px-4">
           <div className="flex items-center gap-2 mb-2">
