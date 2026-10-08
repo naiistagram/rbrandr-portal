@@ -297,6 +297,12 @@ export default function ClientDetailPage() {
       });
     }
     setContent(sortContentByScheduledDate(data.content ?? []));
+    const linkedContentId = searchParams.get("contentId");
+    const linkedContent = (data.content as ContentItem[] | undefined)?.find((item) => item.id === linkedContentId);
+    if (linkedContent) {
+      setTab("Content");
+      openAdminDetail(linkedContent);
+    }
     setContracts(data.contracts ?? []);
     setReports(data.reports ?? []);
     setAssets(data.assets ?? []);
@@ -1085,6 +1091,15 @@ export default function ClientDetailPage() {
     setSendStatusEmail(true);
     setPublishMessage("");
     setPublishResults([]);
+  }
+
+  function closeAdminDetail() {
+    setAdminSelected(null);
+    if (searchParams.has("contentId")) {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("contentId");
+      router.replace(`?${nextParams.toString()}`, { scroll: false });
+    }
   }
 
   async function handleEditFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -2227,7 +2242,7 @@ export default function ClientDetailPage() {
           );
           const selectedDirectPlatforms = DIRECT_PUBLISH_PLATFORMS.filter((platform) => adminEditPlatforms.includes(platform));
           return (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setAdminSelected(null)}>
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeAdminDetail}>
               <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col md:flex-row overflow-hidden animate-fade-in" onClick={(e) => e.stopPropagation()}>
                 {/* Media */}
                 <div className="relative bg-black flex items-center justify-center md:w-[55%] flex-shrink-0 min-h-[220px]">
@@ -2283,7 +2298,7 @@ export default function ClientDetailPage() {
                         <span className="text-xs font-semibold text-[var(--foreground-muted)]">No platform</span>
                       )}
                     </div>
-                    <button onClick={() => setAdminSelected(null)} className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] cursor-pointer">
+                    <button onClick={closeAdminDetail} className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] cursor-pointer">
                       <X className="w-4 h-4" />
                     </button>
                   </div>

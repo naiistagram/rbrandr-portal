@@ -84,6 +84,11 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
     return connectionMap.get(item.project_id) ?? [];
   }
 
+  function selectContent(item: CalendarContent) {
+    setMoveError(null);
+    setSelected(item);
+  }
+
   async function moveContent(itemId: string, scheduledDate: string | null) {
     const item = content.find((entry) => entry.id === itemId);
     if (!item || item.scheduled_date === scheduledDate) return;
@@ -145,7 +150,7 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-lg font-bold text-[var(--foreground)]">Publishing Calendar</h1>
-            <p className="text-sm text-[var(--foreground-muted)]">Drag content between days to reschedule it. Detailed editing and uploads stay in each client&apos;s content area.</p>
+            <p className="text-sm text-[var(--foreground-muted)]">Drag content between days or choose a date in a post&apos;s details. Detailed editing and uploads stay in each client&apos;s content area.</p>
           </div>
           <Link href="/admin/clients" className="inline-flex items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3.5 py-2 text-sm font-semibold text-white hover:opacity-90">
             Manage client content <ExternalLink className="h-3.5 w-3.5" />
@@ -211,8 +216,8 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
               >
                 <p className={cn("mb-1 text-xs font-medium", isSameMonth(day, month) ? "text-[var(--foreground-muted)]" : "text-[var(--foreground-subtle)]")}>{format(day, "d")}</p>
                 <div className="space-y-1">
-                  {dayItems.slice(0, 3).map((item) => <PlannerCard key={item.id} item={item} disabled={movingId === item.id} onClick={() => setSelected(item)} onDragStart={(event) => beginDrag(event, item.id)} onDragEnd={() => { setDraggedId(null); setDropTarget(null); }} />)}
-                  {dayItems.length > 3 && <button onClick={() => setSelected(dayItems[3])} className="w-full text-left text-[10px] font-medium text-[var(--accent)]">+{dayItems.length - 3} more</button>}
+                  {dayItems.slice(0, 3).map((item) => <PlannerCard key={item.id} item={item} disabled={movingId === item.id} onClick={() => selectContent(item)} onDragStart={(event) => beginDrag(event, item.id)} onDragEnd={() => { setDraggedId(null); setDropTarget(null); }} />)}
+                  {dayItems.length > 3 && <button onClick={() => selectContent(dayItems[3])} className="w-full text-left text-[10px] font-medium text-[var(--accent)]">+{dayItems.length - 3} more</button>}
                 </div>
               </div>;
             })}
@@ -234,7 +239,7 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
           </div>
           {unscheduledContent.length > 0 ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              {unscheduledContent.map((item) => <PlannerCard key={item.id} item={item} disabled={movingId === item.id} onClick={() => setSelected(item)} onDragStart={(event) => beginDrag(event, item.id)} onDragEnd={() => { setDraggedId(null); setDropTarget(null); }} />)}
+              {unscheduledContent.map((item) => <PlannerCard key={item.id} item={item} disabled={movingId === item.id} onClick={() => selectContent(item)} onDragStart={(event) => beginDrag(event, item.id)} onDragEnd={() => { setDraggedId(null); setDropTarget(null); }} />)}
             </div>
           ) : <p className="mt-3 text-xs text-[var(--foreground-subtle)]">Everything matching the current filters is on the calendar.</p>}
         </section>
@@ -245,7 +250,7 @@ export function AdminPublishingCalendar({ initialContent, connections, loadError
         </section>
       </main>
 
-      {selected && <DetailPanel item={selected} channels={channelsFor(selected)} onClose={() => setSelected(null)} />}
+      {selected && <DetailPanel item={selected} channels={channelsFor(selected)} moving={movingId === selected.id} moveError={moveError} onDateChange={(date) => void moveContent(selected.id, date)} onClose={() => setSelected(null)} />}
     </div>
   );
 }
@@ -265,7 +270,7 @@ function PlannerCard({ item, disabled, onClick, onDragStart, onDragEnd }: {
     onDragEnd={onDragEnd}
     style={{ borderLeftColor: clientColour(clientName(item)) }}
     className={cn("block w-full cursor-grab rounded-md border border-l-[3px] px-1.5 py-1 text-left transition-all hover:brightness-125 active:cursor-grabbing disabled:cursor-wait disabled:opacity-60", STATUS_CONFIG[item.status].bg, "border-white/5")}
-    aria-label={`Move ${item.title}`}
+    aria-label={`View ${item.title}`}
   >
     <p className="truncate text-[9px] font-medium text-[var(--foreground-muted)]">{clientName(item)}</p>
     <p className="truncate text-[10px] font-semibold text-[var(--foreground)]">{item.title}</p>
@@ -280,13 +285,20 @@ function Summary({ icon: Icon, label, value, color = "text-[var(--accent)]" }: {
   return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4"><Icon className={cn("h-4 w-4", color)} /><p className="mt-3 text-2xl font-bold text-[var(--foreground)]">{value}</p><p className="text-xs text-[var(--foreground-muted)]">{label}</p></div>;
 }
 
-function DetailPanel({ item, channels, onClose }: { item: CalendarContent; channels: Connection[]; onClose: () => void }) {
+function DetailPanel({ item, channels, moving, moveError, onDateChange, onClose }: { item: CalendarContent; channels: Connection[]; moving: boolean; moveError: string | null; onDateChange: (date: string | null) => void; onClose: () => void }) {
   const connected = new Map(channels.map((channel) => [channel.platform, channel]));
   return <div className="fixed inset-0 z-50 flex justify-end bg-black/45" onClick={onClose}>
     <aside className="h-full w-full max-w-md overflow-y-auto border-l border-[var(--border)] bg-[var(--surface)] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
       <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold text-[var(--accent)]">{clientName(item)}</p><h2 className="mt-1 text-lg font-bold text-[var(--foreground)]">{item.title}</h2></div><button onClick={onClose} className="rounded-md p-2 text-[var(--foreground-muted)] hover:bg-[var(--surface-2)]">×</button></div>
+      {item.projects && <Link href={`/admin/clients/${item.projects.client_id}?tab=Content&contentId=${encodeURIComponent(item.id)}`} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2.5 text-sm font-semibold text-white hover:opacity-90">Open this post <ExternalLink className="h-3.5 w-3.5" /></Link>}
       <div className="mt-5 space-y-4 text-sm">
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3"><p className="text-xs text-[var(--foreground-muted)]">Content plan</p><p className="mt-1 font-medium text-[var(--foreground)]">{item.scheduled_date ? format(calendarDate(item.scheduled_date), "EEE d MMMM") : "No planned date"}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}</p></div>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
+          <label htmlFor="calendar-post-date" className="text-xs text-[var(--foreground-muted)]">Planned date</label>
+          <input id="calendar-post-date" type="date" value={item.scheduled_date ?? ""} disabled={moving} onChange={(event) => onDateChange(event.target.value || null)} className="mt-2 block w-full rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] outline-none focus:border-[var(--accent)] disabled:opacity-60" />
+          <p className="mt-2 text-xs text-[var(--foreground-muted)]">{item.scheduled_date ? format(calendarDate(item.scheduled_date), "EEE d MMMM") : "No planned date"}{item.scheduled_time ? ` · ${formatTime(item.scheduled_time)}` : ""}</p>
+          {item.publish_at && <p className="mt-2 text-xs text-amber-300">Changing the date clears the queued publishing time. Schedule publishing again from the post.</p>}
+          {moveError && <p role="alert" className="mt-2 text-xs text-red-300">{moveError}</p>}
+        </div>
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3">
           <div className="flex items-center justify-between gap-3"><p className="text-xs text-[var(--foreground-muted)]">Post preview</p><span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium capitalize text-[var(--foreground-muted)]">{item.content_type}</span></div>
           {item.description ? <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[var(--foreground)]">{item.description}</p> : <p className="mt-2 text-sm text-[var(--foreground-subtle)]">No post copy added.</p>}
@@ -296,7 +308,6 @@ function DetailPanel({ item, channels, onClose }: { item: CalendarContent; chann
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-3"><p className="text-xs text-[var(--foreground-muted)]">Publishing status</p><p className={cn("mt-1 font-semibold", STATUS_CONFIG[item.status].color)}>{item.status === "approved" && item.publish_at ? "Scheduled to publish" : STATUS_CONFIG[item.status].label}</p>{item.publish_at && <p className="mt-1 text-xs text-[var(--foreground-muted)]">Publishing automatically at {format(new Date(item.publish_at), "d MMM, HH:mm")} UK time</p>}{item.publish_error && <p className="mt-1 text-xs text-red-300">Last publish attempt: {item.publish_error}</p>}</div>
         <div><p className="text-xs font-semibold uppercase tracking-wider text-[var(--foreground-muted)]">Channels</p><div className="mt-2 space-y-2">{item.platforms.map((platform) => { const account = connected.get(platform as Connection["platform"]); const publishable = PUBLISHABLE_PLATFORMS.has(platform); return <div key={platform} className="flex items-center justify-between rounded-lg border border-[var(--border)] px-3 py-2"><span className="flex items-center gap-2 text-sm font-medium text-[var(--foreground)]"><span className={cn("h-2 w-2 rounded-full", PLATFORM_CONFIG[platform]?.dot ?? "bg-zinc-400")} />{platform}</span>{publishable ? account ? <span className="text-xs text-emerald-400">Connected · {account.account_name}</span> : <span className="text-xs text-amber-300">Not connected</span> : <span className="text-xs text-[var(--foreground-subtle)]">No direct publishing</span>}</div>; })}</div></div>
       </div>
-      {item.projects && <Link href={`/admin/clients/${item.projects.client_id}?tab=Content`} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] px-3 py-2.5 text-sm font-semibold text-white hover:opacity-90">Open client content <ExternalLink className="h-3.5 w-3.5" /></Link>}
     </aside>
   </div>;
 }
