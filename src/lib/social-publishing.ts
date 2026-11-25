@@ -275,21 +275,99 @@ async function publishInstagram(connection: Connection, caption: string, mediaUr
   return graphRequest(`${connection.account_id}/media_publish`, token, { creation_id: container.id });
 }
 
-async function publishLinkedIn(connection: Connection, caption: string, mediaUrl: string | null) {
-  if (mediaUrl) throw new Error("LinkedIn image/video publishing will be enabled after its upload flow is connected; text posts can publish now.");
-  const response = await fetch("https://api.linkedin.com/rest/posts", {
+const LINKEDIN_API = "https://api.linkedin.com/rest";
+const LINKEDIN_ASSET_TIMEOUT_MS = 20_000;
+
+function linkedInHeaders(token: string) {
+  return {
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+    "Linkedin-Version": "202602",
+    "X-Restli-Protocol-Version": "2.0.0",
+  };
+}
+
+function fileName(url: string) {
+  const name = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "Document");
+  return name.replace(/\.[a-z0-9]+$/i, "").replace(/^\d{10,}[-_]/, "").replace(/[-_]+/g, " ").trim() || "Document";
+}
+
+/**
+ * Uploads one file to LinkedIn's Images or Documents API on behalf of the
+ * organization and returns its URN once LinkedIn reports it usable.
+ */
+async function uploadLinkedInAsset(kind: "images" | "documents", owner: string, token: string, url: string) {
+  const init = await fetch(`${LINKEDIN_API}/${kind}?action=initializeUpload`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${decryptSocialToken(connection.encrypted_access_token)}`,
-      "Content-Type": "application/json",
-      "Linkedin-Version": "202602",
-      "X-Restli-Protocol-Version": "2.0.0",
-    },
+    headers: linkedInHeaders(token),
+    body: JSON.stringify({ initializeUploadRequest: { owner } }),
+  });
+  if (!init.ok) throw new Error(`LinkedIn would not accept an upload: ${await init.text()}`);
+  const { value } = await init.json() as { value: { uploadUrl: string; image?: string; document?: string } };
+  const urn = value.image ?? value.document;
+  if (!value.uploadUrl || !urn) throw new Error("LinkedIn did not return an upload URL.");
+
+  const file = await fetch(url);
+  if (!file.ok) throw new Error("The attachment could not be downloaded for LinkedIn.");
+  const upload = await fetch(value.uploadUrl, {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: await file.arrayBuffer(),
+  });
+  if (!upload.ok) throw new Error(`LinkedIn rejected the file upload: ${await upload.text()}`);
+
+  // Images are usually ready at once; documents need a moment to process.
+  const deadline = Date.now() + LINKEDIN_ASSET_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const check = await fetch(`${LINKEDIN_API}/${kind}/${encodeURIComponent(urn)}`, { headers: linkedInHeaders(token), cache: "no-store" });
+    const status = check.ok ? (await check.json() as { status?: string }).status : undefined;
+    if (!check.ok || status === "AVAILABLE") return urn;
+    if (status === "PROCESSING_FAILED") throw new Error("LinkedIn could not process this file.");
+    await wait(2_000);
+  }
+  throw new Error("LinkedIn is still processing the file. Please try publishing again in a minute.");
+}
+
+/**
+ * LinkedIn parses commentary as "little text": unescaped (, [, @, * and the
+ * like are read as markup and can silently cut the post short. Hashtags are
+ * left as-is so LinkedIn still links them.
+ */
+function escapeLinkedInText(text: string) {
+  return text.replace(/[\\|{}@\[\]()<>*_~]/g, (character) => `\\${character}`);
+}
+
+async function publishLinkedIn(connection: Connection, caption: string, fileUrls: string[] | null) {
+  const token = decryptSocialToken(connection.encrypted_access_token);
+  const files = fileUrls ?? [];
+  const images = files.filter((url) => /\.(jpe?g|png|gif)(\?|$)/i.test(url));
+  const pdfs = files.filter((url) => /\.pdf(\?|$)/i.test(url));
+  if (files.some((url) => /\.(mp4|mov|webm)(\?|$)/i.test(url))) throw new Error("LinkedIn video publishing isn't supported yet.");
+  if (files.some((url) => /\.webp(\?|$)/i.test(url))) throw new Error("LinkedIn doesn't accept WebP images. Upload a JPG or PNG instead.");
+  if (images.length > 20) throw new Error("LinkedIn allows at most 20 images in one post.");
+  if (pdfs.length > 1 || (pdfs.length && images.length)) throw new Error("A LinkedIn post can carry one PDF on its own, or images, but not both.");
+
+  let content: Record<string, unknown> | undefined;
+  if (pdfs.length) {
+    const id = await uploadLinkedInAsset("documents", connection.account_id, token, pdfs[0]);
+    content = { media: { id, title: fileName(pdfs[0]) } };
+  } else if (images.length === 1) {
+    content = { media: { id: await uploadLinkedInAsset("images", connection.account_id, token, images[0]) } };
+  } else if (images.length > 1) {
+    const ids = [];
+    for (const url of images) ids.push(await uploadLinkedInAsset("images", connection.account_id, token, url));
+    content = { multiImage: { images: ids.map((id) => ({ id })) } };
+  }
+
+  const response = await fetch(`${LINKEDIN_API}/posts`, {
+    method: "POST",
+    headers: linkedInHeaders(token),
     body: JSON.stringify({
       author: connection.account_id,
-      commentary: caption,
+      commentary: escapeLinkedInText(caption),
       visibility: "PUBLIC",
       distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      ...(content ? { content } : {}),
       lifecycleState: "PUBLISHED",
       isReshareDisabledByAuthor: false,
     }),
@@ -333,7 +411,7 @@ export async function publishContent(
       try {
         if (item.platform === "Facebook") outcome = await publishFacebook(item, caption, attachment);
         if (item.platform === "Instagram") outcome = await publishInstagram(item, caption, attachment);
-        if (item.platform === "LinkedIn") outcome = await publishLinkedIn(item, caption, attachment);
+        if (item.platform === "LinkedIn") outcome = await publishLinkedIn(item, caption, content.file_urls);
       } catch (publishError) {
         errorMessage = publishError instanceof Error ? publishError.message : "Publishing failed.";
       }
