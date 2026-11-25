@@ -111,7 +111,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     state = parsedState;
     const denied = request.nextUrl.searchParams.get("error");
     const code = request.nextUrl.searchParams.get("code");
-    if (denied || !code) return redirect(request, parsedState.returnTo, "error", "Connection was cancelled.");
+    if (denied || !code) {
+      const detail = request.nextUrl.searchParams.get("error_description");
+      const cancelled = denied === "user_cancelled_login" || denied === "user_cancelled_authorize" || (denied === "access_denied" && !detail);
+      const message = cancelled
+        ? "Connection was cancelled."
+        : `${provider === "meta" ? "Meta" : "LinkedIn"} refused the connection${detail ? `: ${detail}` : denied ? ` (${denied})` : "."}`;
+      return redirect(request, parsedState.returnTo, "error", message);
+    }
     const auth = await getVerifiedAdmin();
     if (!auth) return redirect(request, parsedState.returnTo, "error", "Please sign in again before connecting an account.");
     if (provider === "meta") {

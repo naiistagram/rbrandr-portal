@@ -1863,6 +1863,11 @@ export default function ClientDetailPage() {
                     <p className="text-sm font-semibold text-[var(--foreground)]">Social publishing</p>
                     <p className="text-xs text-[var(--foreground-muted)] mt-0.5">Connect this client&apos;s own accounts. Only approved content can be published.</p>
                   </div>
+                  {searchParams.get("social") === "error" && (
+                    <p className="text-xs text-red-300 md:order-last md:basis-full">
+                      {searchParams.get("socialMessage") ?? "The account could not be connected."}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="secondary" onClick={() => connectSocial("meta")} className="gap-1.5">
                       <Globe className="w-3.5 h-3.5" /> Connect Instagram + Facebook
