@@ -37,7 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     destination.searchParams.set("scope", "pages_show_list,pages_manage_posts,pages_manage_metadata,pages_read_engagement,pages_read_user_content,read_insights,business_management,instagram_basic,instagram_content_publish,instagram_manage_insights");
   } else {
     destination.searchParams.set("client_id", process.env.LINKEDIN_CLIENT_ID!);
-    destination.searchParams.set("scope", "openid profile w_organization_social r_organization_social");
+    destination.searchParams.set("scope", "rw_organization_admin r_organization_social w_organization_social");
   }
   destination.searchParams.set("redirect_uri", redirectUri);
   destination.searchParams.set("state", state);

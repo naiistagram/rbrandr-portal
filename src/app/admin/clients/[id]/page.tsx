@@ -164,7 +164,7 @@ export default function ClientDetailPage() {
   const [publishMessage, setPublishMessage] = useState("");
   const [publishResults, setPublishResults] = useState<Array<{ platform: string; ok: boolean; error: string | null }>>([]);
   const [scheduleMessage, setScheduleMessage] = useState("");
-  type SocialCandidate = { id: string; platform: "Facebook" | "Instagram"; accountName: string };
+  type SocialCandidate = { id: string; platform: "Facebook" | "Instagram" | "LinkedIn"; accountName: string };
   const [socialCandidateId, setSocialCandidateId] = useState<string | null>(null);
   const [socialCandidates, setSocialCandidates] = useState<SocialCandidate[]>([]);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
@@ -255,7 +255,9 @@ export default function ClientDetailPage() {
         if (!Array.isArray(data.accounts)) return;
         setSocialCandidateId(candidateId);
         setSocialCandidates(data.accounts);
-        setSelectedCandidateIds(data.accounts.map((account: SocialCandidate) => account.id));
+        // Nothing pre-ticked: the list holds every Page the admin manages,
+        // across all clients, so each link must be a deliberate choice.
+        setSelectedCandidateIds([]);
       });
   }, [searchParams]);
 

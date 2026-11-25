@@ -61,18 +61,43 @@ async function exchangeLinkedInCode(code: string, redirectUri: string) {
   });
   if (!tokenResponse.ok) throw new Error("LinkedIn did not accept the connection request.");
   const tokenData = await tokenResponse.json() as { access_token: string; expires_in?: number };
-  const rolesResponse = await fetch("https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&state=APPROVED", {
-    headers: {
-      Authorization: `Bearer ${tokenData.access_token}`,
-      "Linkedin-Version": "202602",
-      "X-Restli-Protocol-Version": "2.0.0",
-    },
-  });
+  const headers = {
+    Authorization: `Bearer ${tokenData.access_token}`,
+    "Linkedin-Version": "202602",
+    "X-Restli-Protocol-Version": "2.0.0",
+  };
+  const rolesResponse = await fetch("https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&state=APPROVED", { headers });
   if (!rolesResponse.ok) throw new Error("LinkedIn could not load the Company Pages this user manages.");
   const roles = await rolesResponse.json() as { elements?: Array<{ organization?: string; role?: string }> };
-  const organizations = [...new Set((roles.elements ?? []).map((role) => role.organization).filter((value): value is string => Boolean(value)))];
-  if (!organizations.length) throw new Error("No LinkedIn Company Pages were found. Connect with a Company Page admin account.");
-  return { token: tokenData.access_token, expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null, organizations };
+  // Only these roles can post on a Page's behalf.
+  const organizations = [...new Set((roles.elements ?? [])
+    .filter((role) => role.role === "ADMINISTRATOR" || role.role === "CONTENT_ADMINISTRATOR")
+    .map((role) => role.organization)
+    .filter((value): value is string => Boolean(value)))];
+  if (!organizations.length) throw new Error("No LinkedIn Company Pages were found. Connect with a Company Page admin or content admin account.");
+  const named = await Promise.all(organizations.map(async (organization) => {
+    const id = organization.split(":").pop();
+    const response = await fetch(`https://api.linkedin.com/rest/organizations/${id}`, { headers }).catch(() => null);
+    const data = response?.ok ? await response.json().catch(() => null) as { localizedName?: string; vanityName?: string } | null : null;
+    return { organization, name: data?.localizedName ?? data?.vanityName ?? `LinkedIn Page ${id}` };
+  }));
+  return { token: tokenData.access_token, expiresAt: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null, organizations: named };
+}
+
+async function saveCandidates(request: NextRequest, state: NonNullable<ReturnType<typeof readOAuthState>>, provider: SocialProvider, createdBy: string, candidates: unknown[]) {
+  const admin = createAdminClient();
+  const { data: candidate, error } = await admin.from("social_connection_candidates").insert({
+    project_id: state.projectId,
+    provider,
+    encrypted_payload: encryptSocialToken(JSON.stringify(candidates)),
+    created_by: createdBy,
+    expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+  }).select("id").single();
+  if (error || !candidate) throw new Error(error?.message ?? "Unable to prepare account selection.");
+  const chooseUrl = new URL(state.returnTo, socialAppUrl() || request.url);
+  chooseUrl.searchParams.set("social", "choose");
+  chooseUrl.searchParams.set("candidateId", candidate.id);
+  return NextResponse.redirect(chooseUrl);
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
@@ -89,8 +114,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (denied || !code) return redirect(request, parsedState.returnTo, "error", "Connection was cancelled.");
     const auth = await getVerifiedAdmin();
     if (!auth) return redirect(request, parsedState.returnTo, "error", "Please sign in again before connecting an account.");
-    const admin = createAdminClient();
-
     if (provider === "meta") {
       const pages = await exchangeMetaCode(code, `${socialAppUrl()}/api/social/callback/meta`);
       const candidates = pages.flatMap((page) => {
@@ -102,30 +125,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         });
         return rows;
       });
-      const { data: candidate, error } = await admin.from("social_connection_candidates").insert({
-        project_id: parsedState.projectId,
-        provider: "meta",
-        encrypted_payload: encryptSocialToken(JSON.stringify(candidates)),
-        created_by: auth.user.id,
-        expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-      }).select("id").single();
-      if (error || !candidate) throw new Error(error?.message ?? "Unable to prepare account selection.");
-      const chooseUrl = new URL(parsedState.returnTo, socialAppUrl());
-      chooseUrl.searchParams.set("social", "choose");
-      chooseUrl.searchParams.set("candidateId", candidate.id);
-      return NextResponse.redirect(chooseUrl);
-    } else {
-      const result = await exchangeLinkedInCode(code, `${socialAppUrl()}/api/social/callback/linkedin`);
-      await admin.from("social_connections").delete().eq("project_id", parsedState.projectId).eq("provider", "linkedin");
-      const { error } = await admin.from("social_connections").insert(result.organizations.map((organization) => ({
-        project_id: parsedState.projectId, provider: "linkedin", platform: "LinkedIn", account_id: organization,
-        account_name: organization.replace("urn:li:organization:", "LinkedIn Company Page"),
-        encrypted_access_token: encryptSocialToken(result.token), token_expires_at: result.expiresAt,
-        connected_by: auth.user.id, metadata: { organization },
-      })));
-      if (error) throw new Error(error.message);
+      return saveCandidates(request, parsedState, "meta", auth.user.id, candidates);
     }
-    return redirect(request, parsedState.returnTo, "connected");
+    const result = await exchangeLinkedInCode(code, `${socialAppUrl()}/api/social/callback/linkedin`);
+    return saveCandidates(request, parsedState, "linkedin", auth.user.id, result.organizations.map(({ organization, name }) => ({
+      platform: "LinkedIn", accountId: organization, accountName: name, accessToken: result.token,
+      tokenExpiresAt: result.expiresAt, metadata: { organization },
+    })));
   } catch (error) {
     const fallback = "/admin/clients";
     const message = error instanceof Error ? error.message : "Unable to connect this account.";

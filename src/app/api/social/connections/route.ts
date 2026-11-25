@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     if (error || !candidate || new Date(candidate.expires_at) < new Date()) {
       return NextResponse.json({ error: "Account selection has expired. Please connect again." }, { status: 404 });
     }
-    type Candidate = { platform: "Facebook" | "Instagram"; accountId: string; accountName: string };
+    type Candidate = { platform: "Facebook" | "Instagram" | "LinkedIn"; accountId: string; accountName: string };
     const accounts = (JSON.parse(decryptSocialToken(candidate.encrypted_payload)) as Candidate[])
       .map(({ platform, accountId, accountName }) => ({ id: `${platform}:${accountId}`, platform, accountName }));
     return NextResponse.json({ accounts });
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Account selection has expired. Please connect again." }, { status: 410 });
   }
 
-  type Candidate = { platform: "Facebook" | "Instagram"; accountId: string; accountName: string; accessToken: string; metadata: Record<string, string> };
+  type Candidate = { platform: "Facebook" | "Instagram" | "LinkedIn"; accountId: string; accountName: string; accessToken: string; tokenExpiresAt?: string | null; metadata: Record<string, string> };
   const candidates = JSON.parse(decryptSocialToken(candidate.encrypted_payload)) as Candidate[];
   const selected = candidates.filter((item) => accountIds.includes(`${item.platform}:${item.accountId}`));
   if (!selected.length) return NextResponse.json({ error: "Selected accounts are no longer available." }, { status: 400 });
@@ -88,7 +88,8 @@ export async function POST(request: NextRequest) {
   const { error: insertError } = await auth.admin.from("social_connections").insert(selected.map((item) => ({
     project_id: candidate.project_id, provider: candidate.provider, platform: item.platform,
     account_id: item.accountId, account_name: item.accountName,
-    encrypted_access_token: encryptSocialToken(item.accessToken), metadata: item.metadata, connected_by: auth.user.id,
+    encrypted_access_token: encryptSocialToken(item.accessToken), token_expires_at: item.tokenExpiresAt ?? null,
+    metadata: item.metadata, connected_by: auth.user.id,
   })));
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
   await auth.admin.from("social_connection_candidates").delete().eq("id", candidate.id);
