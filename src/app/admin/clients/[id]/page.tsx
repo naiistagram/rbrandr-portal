@@ -380,7 +380,7 @@ export default function ClientDetailPage() {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.status !== "failed") {
-      const suffix = data.status === "partial" ? " Some metrics were not available from Meta." : "";
+      const suffix = data.status === "partial" ? ` Some metrics were unavailable: ${(data.errors ?? []).join(" ").slice(0, 240)}` : "";
       const contentSuffix = data.contentWritten ? ` Refreshed ${data.contentWritten} post insights.` : "";
       setAnalyticsSyncMessage(`Updated ${data.metricsWritten ?? 0} daily performance points.${contentSuffix}${suffix}`);
     } else {
@@ -1872,7 +1872,7 @@ export default function ClientDetailPage() {
                     <Button size="sm" variant="secondary" onClick={() => connectSocial("meta")} className="gap-1.5">
                       <Globe className="w-3.5 h-3.5" /> Connect Instagram + Facebook
                     </Button>
-                    <Button size="sm" variant="secondary" onClick={syncSocialAnalytics} loading={syncingSocialAnalytics} disabled={!socialConnections.some((connection) => connection.provider === "meta")} className="gap-1.5">
+                    <Button size="sm" variant="secondary" onClick={syncSocialAnalytics} loading={syncingSocialAnalytics} disabled={socialConnections.length === 0} className="gap-1.5">
                       <RefreshCw className="w-3.5 h-3.5" /> Sync performance
                     </Button>
                     <Button size="sm" variant="secondary" onClick={() => connectSocial("linkedin")} className="gap-1.5">

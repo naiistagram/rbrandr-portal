@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getVerifiedAdmin } from "@/lib/social-auth";
-import { syncMetaConnection, type MetaConnection } from "@/lib/social-analytics";
+import { SYNCABLE_PLATFORMS, syncAndStore, type SyncableConnection } from "@/lib/social-sync";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -15,36 +15,14 @@ export async function POST(request: NextRequest) {
   const { data: connections, error } = await auth.admin.from("social_connections")
     .select("id, project_id, provider, platform, account_id, encrypted_access_token")
     .eq("project_id", body.projectId)
-    .eq("provider", "meta")
-    .in("platform", ["Facebook", "Instagram"]);
+    .in("platform", [...SYNCABLE_PLATFORMS]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!connections?.length) return NextResponse.json({ error: "Connect an Instagram or Facebook account before syncing performance." }, { status: 400 });
+  if (!connections?.length) return NextResponse.json({ error: "Connect a social account before syncing performance." }, { status: 400 });
 
-  const results = await Promise.all((connections as MetaConnection[]).map((connection) => syncMetaConnection(connection, days)));
-  const rows = results.flatMap((result) => result.rows);
-  const contentRows = results.flatMap((result) => result.contentRows);
+  const results = await Promise.all((connections as SyncableConnection[]).map((connection) => syncAndStore(auth.admin, connection, days)));
+  const metricsWritten = results.reduce((sum, result) => sum + result.metricsWritten, 0);
+  const contentWritten = results.reduce((sum, result) => sum + result.contentWritten, 0);
   const errors = results.flatMap((result) => result.errors);
-  let written = 0;
-  let contentWritten = 0;
-  if (rows.length) {
-    const { error: upsertError } = await auth.admin.from("social_metric_snapshots").upsert(rows, {
-      onConflict: "project_id,platform,account_id,metric,metric_date",
-    });
-    if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
-    written = rows.length;
-  }
-  if (contentRows.length) {
-    const { error: contentUpsertError } = await auth.admin.from("social_content_metrics").upsert(contentRows, {
-      onConflict: "project_id,platform,account_id,external_post_id",
-    });
-    if (contentUpsertError) return NextResponse.json({ error: contentUpsertError.message }, { status: 500 });
-    contentWritten = contentRows.length;
-  }
-
-  const status = errors.length === 0 ? "success" : written > 0 ? "partial" : "failed";
-  await auth.admin.from("social_analytics_syncs").insert({
-    project_id: body.projectId, provider: "meta", status, metrics_written: written,
-    message: errors.length ? errors.join(" ").slice(0, 1800) : null,
-  });
-  return NextResponse.json({ status, metricsWritten: written, contentWritten, errors });
+  const status = errors.length === 0 ? "success" : metricsWritten || contentWritten ? "partial" : "failed";
+  return NextResponse.json({ status, metricsWritten, contentWritten, errors });
 }

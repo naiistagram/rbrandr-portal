@@ -27,9 +27,10 @@ export async function GET(request: NextRequest) {
   const [{ data: metrics, error: metricsError }, { data: content, error: contentError }, { data: connections, error: connectionsError }, { data: latestSync }] = await Promise.all([
     admin.from("social_metric_snapshots").select("project_id, platform, metric, metric_date, value").in("project_id", projectIds).gte("metric_date", since.toISOString().slice(0, 10)).order("metric_date"),
     admin.from("social_content_metrics").select("project_id, platform, external_post_id, content_type, title, permalink, thumbnail_url, published_at, views, reach, interactions").in("project_id", projectIds).gte("published_at", since.toISOString()).order("views", { ascending: false }),
-    admin.from("social_connections").select("project_id, platform, account_name").in("project_id", projectIds).eq("provider", "meta"),
-    admin.from("social_analytics_syncs").select("project_id, status, metrics_written, message, created_at").in("project_id", projectIds).eq("provider", "meta").order("created_at", { ascending: false }).limit(1),
+    admin.from("social_connections").select("project_id, provider, platform, account_name").in("project_id", projectIds),
+    admin.from("social_analytics_syncs").select("project_id, provider, status, metrics_written, message, created_at").in("project_id", projectIds).order("created_at", { ascending: false }).limit(20),
   ]);
   if (metricsError || contentError || connectionsError) return NextResponse.json({ error: metricsError?.message ?? contentError?.message ?? connectionsError?.message }, { status: 500 });
-  return NextResponse.json({ metrics: metrics ?? [], content: content ?? [], connections: connections ?? [], latestSync: latestSync?.[0] ?? null, days });
+  return NextResponse.json({ metrics: metrics ?? [], content: content ?? [], connections: connections ?? [], latestSync: latestSync?.find((sync) => sync.provider === "meta") ?? null,
+    latestLinkedInSync: latestSync?.find((sync) => sync.provider === "linkedin") ?? null, days });
 }
