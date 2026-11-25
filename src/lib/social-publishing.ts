@@ -95,6 +95,38 @@ async function publishFacebook(connection: Connection, caption: string, mediaUrl
 }
 
 /**
+ * Social accounts are connected on a client's current project, but content
+ * can belong to any of that client's projects. Look across all of them,
+ * preferring the content's own project when the same account appears twice
+ * so nothing is posted more than once.
+ */
+async function connectionsForContent(admin: SupabaseClient, projectId: string, platforms: string[]) {
+  const { data: project, error: projectError } = await admin.from("projects").select("client_id").eq("id", projectId).maybeSingle();
+  if (projectError) throw new Error(projectError.message);
+  let projectIds = [projectId];
+  if (project?.client_id) {
+    const { data: siblings, error: siblingsError } = await admin.from("projects").select("id").eq("client_id", project.client_id);
+    if (siblingsError) throw new Error(siblingsError.message);
+    projectIds = [...new Set([projectId, ...(siblings ?? []).map((sibling) => sibling.id as string)])];
+  }
+  const { data, error } = await admin
+    .from("social_connections")
+    .select("id, project_id, platform, account_id, encrypted_access_token")
+    .in("project_id", projectIds)
+    .in("platform", platforms);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as Array<Connection & { project_id: string }>;
+  rows.sort((a, b) => Number(b.project_id === projectId) - Number(a.project_id === projectId));
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = `${row.platform}:${row.account_id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/**
  * Facebook Pages support a real scheduled-post API. Instagram does not: its
  * media containers expire, so Instagram remains in RBRANDR's timed queue.
  */
@@ -111,13 +143,12 @@ export async function scheduleFacebookInMeta(
     return { scheduled: false, message: "Facebook needs at least 10 minutes' notice for a Meta Planner schedule; RBRANDR will publish it at the chosen time instead." };
   }
 
-  const { data: connection, error } = await admin
-    .from("social_connections")
-    .select("id, platform, account_id, encrypted_access_token")
-    .eq("project_id", content.project_id)
-    .eq("platform", "Facebook")
-    .maybeSingle();
-  if (error) return { scheduled: false, message: error.message };
+  let connection: Connection | undefined;
+  try {
+    [connection] = await connectionsForContent(admin, content.project_id, ["Facebook"]);
+  } catch (lookupError) {
+    return { scheduled: false, message: lookupError instanceof Error ? lookupError.message : "Unable to load the Facebook connection." };
+  }
   if (!connection) return { scheduled: false, message: "No Facebook account is connected." };
 
   const caption = content.description?.trim() ?? "";
@@ -386,13 +417,7 @@ export async function publishContent(
 
   let connections: Connection[] = [];
   if (supportedPlatforms.length) {
-    const { data, error } = await admin
-      .from("social_connections")
-      .select("id, platform, account_id, encrypted_access_token")
-      .eq("project_id", content.project_id)
-      .in("platform", supportedPlatforms);
-    if (error) throw new Error(error.message);
-    connections = (data ?? []) as Connection[];
+    connections = await connectionsForContent(admin, content.project_id, supportedPlatforms);
   }
 
   // Titles are internal labels for the content calendar. Social platforms must
