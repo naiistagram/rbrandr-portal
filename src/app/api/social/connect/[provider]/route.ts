@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     destination.searchParams.set("client_id", process.env.LINKEDIN_CLIENT_ID!);
     destination.searchParams.set("scope", "rw_organization_admin r_organization_social w_organization_social");
   }
+  destination.searchParams.set("response_type", "code");
   destination.searchParams.set("redirect_uri", redirectUri);
   destination.searchParams.set("state", state);
   return NextResponse.redirect(destination);
