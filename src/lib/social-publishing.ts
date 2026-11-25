@@ -287,11 +287,6 @@ function linkedInHeaders(token: string) {
   };
 }
 
-function fileName(url: string) {
-  const name = decodeURIComponent(new URL(url).pathname.split("/").pop() ?? "Document");
-  return name.replace(/\.[a-z0-9]+$/i, "").replace(/^\d{10,}[-_]/, "").replace(/[-_]+/g, " ").trim() || "Document";
-}
-
 /**
  * Uploads one file to LinkedIn's Images or Documents API on behalf of the
  * organization and returns its URN once LinkedIn reports it usable.
@@ -337,7 +332,7 @@ function escapeLinkedInText(text: string) {
   return text.replace(/[\\|{}@\[\]()<>*_~]/g, (character) => `\\${character}`);
 }
 
-async function publishLinkedIn(connection: Connection, caption: string, fileUrls: string[] | null) {
+async function publishLinkedIn(connection: Connection, caption: string, fileUrls: string[] | null, title: string) {
   const token = decryptSocialToken(connection.encrypted_access_token);
   const files = fileUrls ?? [];
   const images = files.filter((url) => /\.(jpe?g|png|gif)(\?|$)/i.test(url));
@@ -350,7 +345,9 @@ async function publishLinkedIn(connection: Connection, caption: string, fileUrls
   let content: Record<string, unknown> | undefined;
   if (pdfs.length) {
     const id = await uploadLinkedInAsset("documents", connection.account_id, token, pdfs[0]);
-    content = { media: { id, title: fileName(pdfs[0]) } };
+    // LinkedIn shows this on the document itself. Stored file names are
+    // machine-generated, so the content item's title is used instead.
+    content = { media: { id, title: title.trim().slice(0, 200) || "Document" } };
   } else if (images.length === 1) {
     content = { media: { id: await uploadLinkedInAsset("images", connection.account_id, token, images[0]) } };
   } else if (images.length > 1) {
@@ -411,7 +408,7 @@ export async function publishContent(
       try {
         if (item.platform === "Facebook") outcome = await publishFacebook(item, caption, attachment);
         if (item.platform === "Instagram") outcome = await publishInstagram(item, caption, attachment);
-        if (item.platform === "LinkedIn") outcome = await publishLinkedIn(item, caption, content.file_urls);
+        if (item.platform === "LinkedIn") outcome = await publishLinkedIn(item, caption, content.file_urls, content.title);
       } catch (publishError) {
         errorMessage = publishError instanceof Error ? publishError.message : "Publishing failed.";
       }
