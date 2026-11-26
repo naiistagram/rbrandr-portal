@@ -64,6 +64,23 @@ function isPdfUrl(url: string) {
   return /\.pdf($|[?#])/i.test(url);
 }
 
+/** Where an item is in the publishing queue, for the card and list banners. */
+function publishState(item: ContentItem): "scheduled" | "publishing" | "failed" | null {
+  if (item.status !== "approved") return null;
+  if (item.publish_error) return "failed";
+  if (item.publish_at && item.publish_started_at) return "publishing";
+  if (item.publish_at) return "scheduled";
+  return null;
+}
+
+/** Formats a publish time in UK time, e.g. "Thu 27 Nov · 10:00". */
+function formatPublishAt(iso: string) {
+  const date = new Date(iso);
+  const day = date.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short" });
+  const time = date.toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit" });
+  return `${day} · ${time}`;
+}
+
 function contentMonth(item: ContentItem) {
   return (item.scheduled_date ?? item.created_at.slice(0, 10)).slice(0, 7);
 }
@@ -2268,6 +2285,49 @@ export default function ClientDetailPage() {
               </div>
             )}
 
+            {/* Scheduled publishing summary */}
+            {(() => {
+              const queued = content
+                .filter((item) => publishState(item) === "scheduled" || publishState(item) === "publishing")
+                .sort((a, b) => (a.publish_at ?? "").localeCompare(b.publish_at ?? ""));
+              const failed = content.filter((item) => publishState(item) === "failed");
+              if (!queued.length && !failed.length) return null;
+              return (
+                <div className="space-y-2">
+                  {queued.length > 0 && (
+                    <div className="rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 py-3">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-sky-200">
+                        <Clock className="w-4 h-4" />
+                        {queued.length === 1 ? "1 post is scheduled to publish" : `${queued.length} posts are scheduled to publish`}
+                      </p>
+                      <div className="mt-2 space-y-1">
+                        {queued.map((item) => (
+                          <button key={item.id} type="button" onClick={() => openAdminDetail(item)} className="flex w-full items-center gap-2 text-left text-xs text-sky-100/80 hover:text-sky-100 cursor-pointer">
+                            <span className="font-semibold tabular-nums whitespace-nowrap">{publishState(item) === "publishing" ? "Publishing now" : formatPublishAt(item.publish_at!)}</span>
+                            <span className="truncate">{item.title}</span>
+                            <span className="ml-auto whitespace-nowrap text-sky-100/60">{item.platforms.filter((p) => ["Instagram", "Facebook", "LinkedIn"].includes(p)).join(", ")}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {failed.length > 0 && (
+                    <div className="rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3">
+                      <p className="text-sm font-semibold text-red-200">{failed.length === 1 ? "1 post failed to publish" : `${failed.length} posts failed to publish`}</p>
+                      <div className="mt-2 space-y-1">
+                        {failed.map((item) => (
+                          <button key={item.id} type="button" onClick={() => openAdminDetail(item)} className="flex w-full items-center gap-2 text-left text-xs text-red-100/80 hover:text-red-100 cursor-pointer">
+                            <span className="font-semibold truncate">{item.title}</span>
+                            <span className="truncate text-red-100/60">{item.publish_error}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Card grid grouped by platform */}
             {content.length > 0 && (() => {
               const filtered = sortContentByScheduledDate(content.filter((i) =>
@@ -2342,6 +2402,17 @@ export default function ClientDetailPage() {
                                       {STATUS_CONFIG[item.status as keyof typeof STATUS_CONFIG]?.label ?? item.status}
                                     </div>
                                   </div>
+                                  {publishState(item) && (
+                                    <div className={cn(
+                                      "absolute inset-x-0 bottom-0 flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-semibold",
+                                      publishState(item) === "failed" ? "bg-red-500/90 text-white" : "bg-sky-500/90 text-white",
+                                    )}>
+                                      <Clock className="w-3 h-3 flex-shrink-0" />
+                                      <span className="truncate">
+                                        {publishState(item) === "failed" ? "Publishing failed" : publishState(item) === "publishing" ? "Publishing now…" : `Scheduled · ${formatPublishAt(item.publish_at!)}`}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="p-3 space-y-2">
                                   <p className="text-sm font-semibold text-[var(--foreground)] line-clamp-2 leading-tight">{item.title}</p>
