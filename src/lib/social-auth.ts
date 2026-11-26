@@ -30,6 +30,56 @@ export function createOAuthState(state: OAuthState) {
   return `${payload}.${sign(payload)}`;
 }
 
+/**
+ * A portal user connecting their own LinkedIn profile so the agency can
+ * mention them. It shares the Company Page callback URL, so LinkedIn needs no
+ * extra redirect URI, but carries its own purpose and the user it belongs to.
+ */
+type MemberOAuthState = {
+  purpose: "linkedin-member";
+  userId: string;
+  returnTo: string;
+  expiresAt: number;
+};
+
+const MEMBER_RETURN_PATHS = new Set(["/settings", "/admin/settings"]);
+
+export function createMemberOAuthState(state: MemberOAuthState) {
+  const payload = encode(JSON.stringify(state));
+  return `${payload}.${sign(payload)}`;
+}
+
+function verifiedPayload(value: string | null) {
+  if (!value) throw new Error("Missing OAuth state.");
+  const [payload, receivedSignature] = value.split(".");
+  if (!payload || !receivedSignature) throw new Error("Invalid OAuth state.");
+  const expectedSignature = sign(payload);
+  if (receivedSignature.length !== expectedSignature.length || !timingSafeEqual(Buffer.from(receivedSignature), Buffer.from(expectedSignature))) {
+    throw new Error("Invalid OAuth state.");
+  }
+  return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>;
+}
+
+/** Returns the member state when this callback belongs to a personal LinkedIn connection. */
+export function readMemberOAuthState(value: string | null): MemberOAuthState | null {
+  let state: Record<string, unknown>;
+  try {
+    state = verifiedPayload(value);
+  } catch {
+    return null;
+  }
+  if (state.purpose !== "linkedin-member") return null;
+  if (typeof state.userId !== "string" || typeof state.returnTo !== "string" || !MEMBER_RETURN_PATHS.has(state.returnTo)) {
+    throw new Error("Invalid LinkedIn connection request.");
+  }
+  if (typeof state.expiresAt !== "number" || state.expiresAt < Date.now()) throw new Error("LinkedIn connection has expired. Please try again.");
+  return state as unknown as MemberOAuthState;
+}
+
+export function memberReturnPath(value: string | null) {
+  return value && MEMBER_RETURN_PATHS.has(value) ? value : "/settings";
+}
+
 export function readOAuthState(value: string | null, provider: SocialProvider) {
   if (!value) throw new Error("Missing OAuth state.");
   const [payload, receivedSignature] = value.split(".");

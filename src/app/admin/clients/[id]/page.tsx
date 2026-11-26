@@ -18,6 +18,7 @@ import { Badge, StatusDot } from "@/components/ui/badge";
 import { cn, formatDate, formatTime, STATUS_CONFIG } from "@/lib/utils";
 import { PLATFORM_CONFIG, TYPE_PILL, PLATFORM_ORDER } from "@/lib/content-display";
 import { DEFAULT_MONTHLY_POST_TARGET, targetsByClient } from "@/lib/monthly-cadence";
+import { ContentTagPanel, TaggableImage, useContentTags } from "@/components/social/content-tagging";
 import type {
   Profile, Project, ContentItem, Contract, Report,
   Asset, Document as Doc, Milestone as MS, Ticket, Form, Feedback,
@@ -125,6 +126,11 @@ export default function ClientDetailPage() {
   const [adminEditPlatforms, setAdminEditPlatforms] = useState<string[]>([]);
   const [uploadingEditFile, setUploadingEditFile] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
+  const contentTags = useContentTags(adminSelected?.id ?? null);
+  const adminDescRef = useRef<HTMLTextAreaElement>(null);
+  // Tags chosen in the New Content form, saved once the item is created.
+  const newContentTags = useContentTags(null, { draft: true });
+  const newDescRef = useRef<HTMLTextAreaElement>(null);
   const adminEditFileRef = useRef<HTMLInputElement>(null);
   // Admin content filters
   const [adminContentStatus, setAdminContentStatus] = useState<"all" | ContentItem["status"]>("all");
@@ -690,6 +696,11 @@ export default function ClientDetailPage() {
     const json = await res.json();
     if (!res.ok) { alert(`Failed to add content: ${json.error}`); setAddingContent(false); return; }
     if (json.content) setContent((prev) => sortContentByScheduledDate([...prev, json.content]));
+    if (json.content?.id && newContentTags.tags.length) {
+      const tagError = await newContentTags.persist(json.content.id);
+      if (tagError) alert(`Content added, but the tags couldn't be saved: ${tagError}\nOpen the item to tag people again.`);
+    }
+    newContentTags.reset();
     setShowContentForm(false);
     setContentForm({ title: "", content_type: "post", platforms: [], description: "", review_note: "", scheduled_date: "", scheduled_time: "", status: "draft", send_email: true });
     setContentFileUrls([]);
@@ -1126,6 +1137,32 @@ export default function ClientDetailPage() {
     setSendStatusEmail(true);
     setPublishMessage("");
     setPublishResults([]);
+  }
+
+  function insertNewCaptionMention(token: string) {
+    const field = newDescRef.current;
+    setContentForm((form) => {
+      const current = form.description;
+      if (current.includes(token)) return form;
+      const start = field?.selectionStart ?? current.length;
+      const end = field?.selectionEnd ?? current.length;
+      const before = current.slice(0, start);
+      const spacer = before && !/\s$/.test(before) ? " " : "";
+      return { ...form, description: `${before}${spacer}${token} ${current.slice(end)}`.replace(/ +$/, "") };
+    });
+  }
+
+  /** Inserts an @[Name] mention at the caption cursor; resolved per platform when publishing. */
+  function insertCaptionMention(token: string) {
+    const field = adminDescRef.current;
+    setAdminEditDesc((current) => {
+      if (current.includes(token)) return current;
+      const start = field?.selectionStart ?? current.length;
+      const end = field?.selectionEnd ?? current.length;
+      const before = current.slice(0, start);
+      const spacer = before && !/\s$/.test(before) ? " " : "";
+      return `${before}${spacer}${token} ${current.slice(end)}`.replace(/ +$/, "");
+    });
   }
 
   function closeAdminDetail() {
@@ -2079,7 +2116,7 @@ export default function ClientDetailPage() {
               <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5 space-y-4 max-w-2xl">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-[var(--foreground)]">New Content Item</h4>
-                  <button onClick={() => setShowContentForm(false)} className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] cursor-pointer"><X className="w-4 h-4" /></button>
+                  <button onClick={() => { setShowContentForm(false); newContentTags.reset(); }} className="text-[var(--foreground-subtle)] hover:text-[var(--foreground)] cursor-pointer"><X className="w-4 h-4" /></button>
                 </div>
                 <form onSubmit={handleAddContent} className="space-y-3">
                   <div>
@@ -2159,7 +2196,10 @@ export default function ClientDetailPage() {
                   </label>
                   <div>
                     <label className={labelClass}>Caption / Description</label>
-                    <textarea rows={8} value={contentForm.description} onChange={(e) => setContentForm((f) => ({ ...f, description: e.target.value }))} placeholder="Write the full caption, hashtags, or notes..." className={`${inputClass} min-h-48 resize-y leading-relaxed`} />
+                    <textarea ref={newDescRef} rows={8} value={contentForm.description} onChange={(e) => setContentForm((f) => ({ ...f, description: e.target.value }))} placeholder="Write the full caption, hashtags, or notes..." className={`${inputClass} min-h-48 resize-y leading-relaxed`} />
+                    {/@\[[^\]\n]+\]/.test(contentForm.description) && (
+                      <p className="mt-1 text-[10px] text-[var(--foreground-subtle)]">@[Name] becomes @username on Instagram, a mention on LinkedIn and the plain name on Facebook.</p>
+                    )}
                   </div>
                   <div>
                     <label className={labelClass}>Attachments (PDF, images, videos)</label>
@@ -2186,8 +2226,35 @@ export default function ClientDetailPage() {
                       </div>
                     )}
                   </div>
+                  {(() => {
+                    const imageIndexes = contentFileUrls
+                      .map((url, index) => isImageUrl(url) && !isPdfUrl(url) && !/\.(mp4|mov|webm|ogg|avi)($|[?#])/i.test(url) ? index : -1)
+                      .filter((index) => index >= 0);
+                    const firstImage = imageIndexes[0];
+                    const showPhoto = firstImage !== undefined && contentForm.platforms.includes("Instagram") && newContentTags.tags.some((tag) => tag.platform === "Instagram");
+                    return (
+                      <div className="space-y-2">
+                        {showPhoto && (
+                          <div className="flex justify-center rounded-lg bg-black p-2">
+                            <TaggableImage src={contentFileUrls[firstImage]} alt={contentForm.title || "Attachment"} mediaIndex={firstImage} state={newContentTags} />
+                          </div>
+                        )}
+                        <ContentTagPanel
+                          state={newContentTags}
+                          platforms={contentForm.platforms}
+                          imageIndexes={imageIndexes}
+                          currentMediaIndex={firstImage ?? 0}
+                          locked={false}
+                          onInsertMention={insertNewCaptionMention}
+                        />
+                        {contentForm.platforms.includes("Instagram") && !imageIndexes.length && (
+                          <p className="text-[10px] text-[var(--foreground-subtle)]">Attach an image to tag people in the photo on Instagram.</p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex gap-3">
-                    <Button type="button" variant="secondary" className="flex-1" onClick={() => { setShowContentForm(false); setContentFileUrls([]); }}>Cancel</Button>
+                    <Button type="button" variant="secondary" className="flex-1" onClick={() => { setShowContentForm(false); setContentFileUrls([]); newContentTags.reset(); }}>Cancel</Button>
                     <Button type="submit" className="flex-1" loading={addingContent}>Add Content</Button>
                   </div>
                 </form>
@@ -2336,7 +2403,7 @@ export default function ClientDetailPage() {
                           className="w-full h-[480px] border-0 bg-white"
                         />
                       ) : isImageUrl(media[adminMediaIndex]) ? (
-                        <img src={media[adminMediaIndex]} alt={adminSelected.title} className="max-w-full max-h-[480px] object-contain" />
+                        <TaggableImage src={media[adminMediaIndex]} alt={adminSelected.title} mediaIndex={adminMediaIndex} state={contentTags} />
                       ) : (
                         <div className="flex flex-col items-center gap-3 p-8">
                           <Paperclip className="w-8 h-8 text-zinc-400" />
@@ -2560,13 +2627,27 @@ export default function ClientDetailPage() {
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-[var(--foreground-muted)] block">Caption / Description</label>
                       <textarea
+                        ref={adminDescRef}
                         rows={4}
                         value={adminEditDesc}
                         onChange={(e) => setAdminEditDesc(e.target.value)}
                         placeholder="Add a caption or notes for the client…"
                         className={`${inputClass} resize-none`}
                       />
+                      {/@\[[^\]\n]+\]/.test(adminEditDesc) && (
+                        <p className="text-[10px] text-[var(--foreground-subtle)]">@[Name] becomes @username on Instagram, a mention on LinkedIn and the plain name on Facebook. Save changes to keep caption edits.</p>
+                      )}
                     </div>
+
+                    <ContentTagPanel
+                      state={contentTags}
+                      platforms={adminEditPlatforms}
+                      imageIndexes={media.map((url, index) => isImageUrl(url) && !isPdfUrl(url) && !/\.(mp4|mov|webm|ogg|avi)($|[?#])/i.test(url) ? index : -1).filter((index) => index >= 0)}
+                      currentMediaIndex={adminMediaIndex}
+                      locked={adminSelected.status === "published"}
+                      onInsertMention={insertCaptionMention}
+                    />
+
 
                     {/* File upload */}
                     <div className="space-y-2">

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { encryptSocialToken } from "@/lib/social-crypto";
-import { getVerifiedAdmin, readOAuthState, socialAppUrl, type SocialProvider } from "@/lib/social-auth";
+import { getVerifiedAdmin, readMemberOAuthState, readOAuthState, socialAppUrl, type SocialProvider } from "@/lib/social-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { isMissingTableError } from "@/lib/social-tagging";
 
 export const runtime = "nodejs";
 
@@ -100,10 +102,78 @@ async function saveCandidates(request: NextRequest, state: NonNullable<ReturnTyp
   return NextResponse.redirect(chooseUrl);
 }
 
+/**
+ * A portal user connected their own LinkedIn profile. Their member ID becomes
+ * urn:li:person:{sub}, which is what LinkedIn needs to @mention them.
+ */
+async function connectLinkedInMember(request: NextRequest, state: NonNullable<ReturnType<typeof readMemberOAuthState>>) {
+  const denied = request.nextUrl.searchParams.get("error");
+  const code = request.nextUrl.searchParams.get("code");
+  if (denied || !code) return redirect(request, state.returnTo, "error", "LinkedIn connection was cancelled.");
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || user.id !== state.userId) return redirect(request, state.returnTo, "error", "Please sign in again before connecting LinkedIn.");
+
+  const tokenResponse = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: `${socialAppUrl()}/api/social/callback/linkedin`,
+      client_id: process.env.LINKEDIN_CLIENT_ID!,
+      client_secret: process.env.LINKEDIN_CLIENT_SECRET!,
+    }),
+  });
+  if (!tokenResponse.ok) return redirect(request, state.returnTo, "error", "LinkedIn did not accept the connection request.");
+  const { access_token: accessToken } = await tokenResponse.json() as { access_token: string };
+  const profileResponse = await fetch("https://api.linkedin.com/v2/userinfo", { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!profileResponse.ok) return redirect(request, state.returnTo, "error", "LinkedIn did not share your profile.");
+  const profile = await profileResponse.json() as { sub?: string; name?: string; given_name?: string; family_name?: string };
+  if (!profile.sub || !/^[A-Za-z0-9_-]+$/.test(profile.sub)) return redirect(request, state.returnTo, "error", "LinkedIn did not return a member ID.");
+  const linkedInName = profile.name ?? [profile.given_name, profile.family_name].filter(Boolean).join(" ");
+
+  const admin = createAdminClient();
+  const fields = {
+    linkedin_urn: `urn:li:person:${profile.sub}`,
+    linkedin_name: linkedInName || null,
+    linkedin_connected_at: new Date().toISOString(),
+  };
+  const { data: existing, error: lookupError } = await admin.from("social_people").select("id").eq("profile_id", user.id).maybeSingle();
+  if (lookupError) {
+    return redirect(request, state.returnTo, "error", isMissingTableError(lookupError) ? "Tagging is not set up yet. Please ask RBRANDR to enable it." : lookupError.message);
+  }
+  if (existing) {
+    const { error } = await admin.from("social_people").update(fields).eq("id", existing.id);
+    if (error) return redirect(request, state.returnTo, "error", error.message);
+  } else {
+    const { data: portalProfile } = await admin.from("profiles").select("full_name").eq("id", user.id).single();
+    const { error } = await admin.from("social_people").insert({
+      ...fields,
+      display_name: (portalProfile?.full_name || linkedInName || "Portal user").replace(/[[\]\n]/g, "").slice(0, 120),
+      kind: "person",
+      profile_id: user.id,
+      created_by: user.id,
+    });
+    if (error) return redirect(request, state.returnTo, "error", error.message);
+  }
+  return redirect(request, state.returnTo, "connected");
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
   const { provider: providerParam } = await params;
   const provider = providerParam === "meta" || providerParam === "linkedin" ? providerParam as SocialProvider : null;
   if (!provider) return NextResponse.json({ error: "Unknown provider" }, { status: 404 });
+
+  if (provider === "linkedin") {
+    try {
+      const memberState = readMemberOAuthState(request.nextUrl.searchParams.get("state"));
+      if (memberState) return await connectLinkedInMember(request, memberState);
+    } catch (error) {
+      return redirect(request, "/settings", "error", error instanceof Error ? error.message : "Unable to connect LinkedIn.");
+    }
+  }
 
   let state: ReturnType<typeof readOAuthState> | null = null;
   try {

@@ -1,5 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { decryptSocialToken } from "@/lib/social-crypto";
+import {
+  loadTaggingContext,
+  MAX_INSTAGRAM_TAGS,
+  recordTagOutcome,
+  renderCaptionForPlatform,
+  type ContentTag,
+  type SocialPerson,
+  type TaggingContext,
+} from "@/lib/social-tagging";
 
 type Connection = {
   id: string;
@@ -151,8 +160,15 @@ export async function scheduleFacebookInMeta(
   }
   if (!connection) return { scheduled: false, message: "No Facebook account is connected." };
 
-  const caption = content.description?.trim() ?? "";
-  if (!caption) return { scheduled: false, message: "Add a caption or notes before scheduling this content in Meta." };
+  const rawCaption = content.description?.trim() ?? "";
+  if (!rawCaption) return { scheduled: false, message: "Add a caption or notes before scheduling this content in Meta." };
+  let caption = rawCaption;
+  try {
+    const tagging = await loadTaggingContext(admin, content.id, rawCaption);
+    caption = renderCaptionForPlatform(rawCaption, "Facebook", tagging.directory);
+  } catch (tagError) {
+    return { scheduled: false, message: tagError instanceof Error ? tagError.message : "Could not prepare the caption's mentions." };
+  }
   const attachment = firstMedia(content.file_urls);
   if (attachment && mediaType(attachment) === "video") {
     return { scheduled: false, message: "Facebook video scheduling will remain in RBRANDR's timed queue for now." };
@@ -291,12 +307,16 @@ export async function finalizeMetaFacebookPublication(admin: SupabaseClient, con
   return true;
 }
 
-async function publishInstagram(connection: Connection, caption: string, mediaUrl: string | null) {
+type InstagramUserTag = { username: string; x: number; y: number };
+
+async function publishInstagram(connection: Connection, caption: string, mediaUrl: string | null, userTags: InstagramUserTag[] = []) {
   if (!mediaUrl) throw new Error("Instagram needs an image or video attachment.");
   const token = decryptSocialToken(connection.encrypted_access_token);
   const fields: Record<string, string> = mediaType(mediaUrl) === "video"
     ? { media_type: "REELS", video_url: mediaUrl, caption }
     : { image_url: mediaUrl, caption };
+  // Meta documents photo tags for images only, so Reels are never sent tags.
+  if (userTags.length && mediaType(mediaUrl) === "image") fields.user_tags = JSON.stringify(userTags);
   const container = await graphRequest(`${connection.account_id}/media`, token, fields);
   if (!container.id) throw new Error("Instagram did not create a media container.");
   // Meta processes the container asynchronously. Publishing it before it is
@@ -354,15 +374,6 @@ async function uploadLinkedInAsset(kind: "images" | "documents", owner: string, 
   throw new Error("LinkedIn is still processing the file. Please try publishing again in a minute.");
 }
 
-/**
- * LinkedIn parses commentary as "little text": unescaped (, [, @, * and the
- * like are read as markup and can silently cut the post short. Hashtags are
- * left as-is so LinkedIn still links them.
- */
-function escapeLinkedInText(text: string) {
-  return text.replace(/[\\|{}@\[\]()<>*_~]/g, (character) => `\\${character}`);
-}
-
 async function publishLinkedIn(connection: Connection, caption: string, fileUrls: string[] | null, title: string) {
   const token = decryptSocialToken(connection.encrypted_access_token);
   const files = fileUrls ?? [];
@@ -392,7 +403,8 @@ async function publishLinkedIn(connection: Connection, caption: string, fileUrls
     headers: linkedInHeaders(token),
     body: JSON.stringify({
       author: connection.account_id,
-      commentary: escapeLinkedInText(caption),
+      // Already escaped, with @mentions, by renderCaptionForPlatform.
+      commentary: caption,
       visibility: "PUBLIC",
       distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
       ...(content ? { content } : {}),
@@ -402,6 +414,41 @@ async function publishLinkedIn(connection: Connection, caption: string, fileUrls
   });
   if (!response.ok) throw new Error(await response.text() || "LinkedIn rejected this post.");
   return { id: response.headers.get("x-restli-id") ?? undefined };
+}
+
+type PlatformTagPlan = {
+  /** Tags that will be sent with this post. */
+  sent: ContentTag[];
+  /** Tags that cannot be sent, with the reason. */
+  skipped: Array<{ tag: ContentTag; reason: string }>;
+  handles: Map<string, string | null>;
+  instagramUserTags: InstagramUserTag[];
+  linkedInPeople: SocialPerson[];
+};
+
+function planTags(context: TaggingContext, platform: string, attachment: string | null, attachmentIndex: number): PlatformTagPlan {
+  const plan: PlatformTagPlan = { sent: [], skipped: [], handles: new Map(), instagramUserTags: [], linkedInPeople: [] };
+  for (const tag of context.tags) {
+    if (tag.platform !== platform) continue;
+    const person = tag.social_person_id ? context.peopleById.get(tag.social_person_id) : undefined;
+    if (!person) { plan.skipped.push({ tag, reason: "This person was removed from the tagging directory." }); continue; }
+
+    if (platform === "Instagram") {
+      if (!person.instagram_username) { plan.skipped.push({ tag, reason: "No Instagram username saved for this person." }); continue; }
+      if (!attachment || mediaType(attachment) !== "image") { plan.skipped.push({ tag, reason: "Instagram photo tags only work on images." }); continue; }
+      if (tag.media_index !== attachmentIndex) { plan.skipped.push({ tag, reason: "Instagram publishes only the first image, and this tag is on a different attachment." }); continue; }
+      if (plan.instagramUserTags.length >= MAX_INSTAGRAM_TAGS) { plan.skipped.push({ tag, reason: `Instagram allows up to ${MAX_INSTAGRAM_TAGS} tags per image.` }); continue; }
+      plan.instagramUserTags.push({ username: person.instagram_username, x: Number(tag.x ?? 0.5), y: Number(tag.y ?? 0.5) });
+      plan.handles.set(tag.id, person.instagram_username);
+      plan.sent.push(tag);
+    } else {
+      if (!person.linkedin_urn) { plan.skipped.push({ tag, reason: "No LinkedIn ID saved for this person." }); continue; }
+      plan.linkedInPeople.push(person);
+      plan.handles.set(tag.id, person.linkedin_urn);
+      plan.sent.push(tag);
+    }
+  }
+  return plan;
 }
 
 export async function publishContent(
@@ -425,17 +472,32 @@ export async function publishContent(
   const caption = content.description?.trim() ?? "";
   if (!caption) throw new Error("Add a caption or notes before publishing this content.");
   const attachment = firstMedia(content.file_urls);
+  const attachmentIndex = attachment ? (content.file_urls ?? []).indexOf(attachment) : -1;
+  const tagging = await loadTaggingContext(admin, content.id, caption);
   const results: PublishResult[] = [
     ...alreadyScheduledPlatforms.map((platform) => ({ platform, accountId: null, ok: true, error: null })),
     ...await Promise.all(connections.map(async (item) => {
       let outcome: { id?: string } | undefined;
       let errorMessage: string | null = null;
+      const tagPlan = planTags(tagging, item.platform, attachment, attachmentIndex);
+      const platformCaption = renderCaptionForPlatform(caption, item.platform, tagging.directory, tagPlan.linkedInPeople);
       try {
-        if (item.platform === "Facebook") outcome = await publishFacebook(item, caption, attachment);
-        if (item.platform === "Instagram") outcome = await publishInstagram(item, caption, attachment);
-        if (item.platform === "LinkedIn") outcome = await publishLinkedIn(item, caption, content.file_urls, content.title);
+        if (item.platform === "Facebook") outcome = await publishFacebook(item, platformCaption, attachment);
+        if (item.platform === "Instagram") outcome = await publishInstagram(item, platformCaption, attachment, tagPlan.instagramUserTags);
+        if (item.platform === "LinkedIn") outcome = await publishLinkedIn(item, platformCaption, content.file_urls, content.title);
       } catch (publishError) {
         errorMessage = publishError instanceof Error ? publishError.message : "Publishing failed.";
+      }
+      // Tag bookkeeping must never turn a successful post into a failure.
+      try {
+        await recordTagOutcome(admin, tagPlan.sent, errorMessage
+          ? { ok: false, error: `Post failed: ${errorMessage}` }
+          : { ok: true, externalPostId: outcome?.id ?? null }, tagPlan.handles);
+        for (const { tag, reason } of tagPlan.skipped) {
+          await recordTagOutcome(admin, [tag], { ok: false, error: reason }, tagPlan.handles);
+        }
+      } catch (tagError) {
+        console.error("Could not record social tag outcome", tagError);
       }
       await admin.from("social_publish_attempts").insert({
         content_item_id: content.id, social_connection_id: item.id, platform: item.platform,

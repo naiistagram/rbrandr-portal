@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { User, Camera, Save, Mail, Building2, Lock, Eye, EyeOff, CheckCircle2, Users } from "lucide-react";
+import { TaggingHandlesCard } from "@/components/social/tagging-handles-card";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Topbar } from "@/components/layout/topbar";
@@ -273,6 +274,8 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          <TaggingHandlesCard returnTo="/settings" />
 
           {/* Security */}
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 space-y-4">

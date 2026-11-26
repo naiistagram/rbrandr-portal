@@ -5,6 +5,7 @@ import { User, Camera, Save, Mail, Building2, Lock, Eye, EyeOff, CheckCircle2 } 
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Topbar } from "@/components/layout/topbar";
+import { TaggingHandlesCard } from "@/components/social/tagging-handles-card";
 import { getInitials } from "@/lib/utils";
 import type { Profile } from "@/lib/supabase/types";
 
@@ -230,6 +231,8 @@ export default function SettingsPage() {
               )}
             </Button>
           </div>
+
+          <TaggingHandlesCard returnTo="/admin/settings" />
 
           {/* Security */}
           <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-6 space-y-4">
